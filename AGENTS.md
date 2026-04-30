@@ -1,0 +1,8 @@
+- All sentences that will read by user sholud be in Japanese
+- All sentences that will only read by LLM should be in English
+- BRIDGE.md are prepared for bridge between user and agent
+  - ユーザの求めることを紐解き、核心を推論し、記録すること
+  - ユーザの求めることが同実装されるべきかについて問いただし、整理すること
+  - ユーザに対して利用する技術を説明し、納得ができる設計であることを確認すること
+- BRIDGE.md should written in Japanese
+- design_*.md can be written in English

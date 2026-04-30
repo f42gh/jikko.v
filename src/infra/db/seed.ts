@@ -1,0 +1,41 @@
+import type { SeedData } from "./types";
+
+export const seedDemoData: SeedData = {
+  tasks: [
+    {
+      id: "task-1",
+      title: "Break quarterly goals into one executable next action",
+      description: "Reduce ambiguity so the rest of the week stops feeling heavy.",
+      status: "pending",
+      parentTaskId: null,
+      effortEstimate: 2,
+      urgency: 4,
+      impact: 5,
+      penaltyOfDelay: 4,
+      momentumGain: 5,
+      emotionalResistance: 2,
+      energyRequired: 2,
+      dueAt: null,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    },
+    {
+      id: "task-2",
+      title: "Reply to the pending invoice email",
+      description: "Unlock payment and remove background stress.",
+      status: "pending",
+      parentTaskId: null,
+      effortEstimate: 1,
+      urgency: 5,
+      impact: 4,
+      penaltyOfDelay: 5,
+      momentumGain: 3,
+      emotionalResistance: 2,
+      energyRequired: 1,
+      dueAt: null,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    },
+  ],
+  events: [],
+};
