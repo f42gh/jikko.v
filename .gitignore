@@ -4,6 +4,9 @@ src-tauri/target/
 
 .DS_Store
 *.log
+.idea/
+data/
+icon.png
 
 .env
 .env.*

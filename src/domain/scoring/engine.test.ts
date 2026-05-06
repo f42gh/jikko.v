@@ -26,6 +26,6 @@ describe("scoreTask", () => {
 
     expect(recommendation.priorityScore).toBeGreaterThan(2);
     expect(recommendation.expectedRoi).toBeGreaterThan(1);
-    expect(recommendation.whyNowSummary).toContain("Important task");
+    expect(recommendation.whyNowSummary).toContain("今やる価値");
   });
 });

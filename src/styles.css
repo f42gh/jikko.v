@@ -3,19 +3,34 @@
 @tailwind utilities;
 
 :root {
-  color: #111111;
+  color: #f7f7f2;
   background:
-    radial-gradient(circle at top left, rgba(176, 122, 26, 0.16), transparent 32%),
-    linear-gradient(180deg, #fbf7ef 0%, #f3ecdf 100%);
-  font-family: "Avenir Next", system-ui, sans-serif;
+    linear-gradient(135deg, rgba(176, 228, 204, 0.12), transparent 28%),
+    linear-gradient(180deg, #000000 0%, #050506 45%, #0b0b0d 100%);
+  font-family: "Helvetica Neue", Meiryo, "Hiragino Kaku Gothic ProN", "Yu Gothic", sans-serif;
 }
 
 body {
   margin: 0;
   min-width: 320px;
   min-height: 100vh;
+  background: #000000;
+  color: #f7f7f2;
 }
 
 #root {
   min-height: 100vh;
+}
+
+.metric-whole {
+  font-size: clamp(2.8rem, 7vw, 5.6rem);
+  font-variant-numeric: tabular-nums lining-nums;
+  letter-spacing: -0.04em;
+}
+
+.metric-fraction {
+  font-size: clamp(1.4rem, 2.2vw, 2.2rem);
+  font-variant-numeric: tabular-nums lining-nums;
+  opacity: 0.74;
+  transform: translateY(-0.12em);
 }

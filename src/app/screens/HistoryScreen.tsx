@@ -14,32 +14,43 @@ export function HistoryScreen() {
 
   return (
     <div className="space-y-6">
+      <div>
+        <h2 className="font-display text-3xl text-ink">積み上がり</h2>
+        <p className="mt-2 text-sm leading-6 text-white/55">
+          まだ簡易表示ですが、完了と手応えが返ってくるかを先に確認します。
+        </p>
+      </div>
       <div className="grid gap-4 md:grid-cols-3">
         <StatCard
-          label="Completed"
-          note="Finished tasks captured in the local event stream."
+          label="完了"
+          note=""
           value={String(historyMetrics.completedCount)}
         />
         <StatCard
-          label="Momentum"
-          note="Synthetic confidence score from completed work."
+          label="勢い"
+          note=""
           value={historyMetrics.confidenceScore.toFixed(1)}
         />
         <StatCard
           label="ROI"
-          note="Expected return recovered from prioritized action."
+          note=""
           value={historyMetrics.totalRoi.toFixed(1)}
         />
       </div>
-      <div className="rounded-3xl border border-black/10 bg-white p-6 shadow-card">
-        <p className="text-xs uppercase tracking-[0.3em] text-black/45">Completion trend</p>
-        <div className="mt-6 h-72">
+      <div className="rounded-3xl border border-white/10 bg-white/[0.06] p-6 shadow-card backdrop-blur-xl">
+        <div className="mb-4 flex items-end justify-between gap-4">
+          <div>
+            <p className="text-sm font-medium text-ink">完了推移</p>
+            <p className="mt-1 text-sm text-white/48">実データ接続前の簡易グラフです。</p>
+          </div>
+        </div>
+        <div className="h-72">
           <ResponsiveContainer width="100%" height="100%">
             <LineChart data={historyMetrics.chartData}>
-              <XAxis dataKey="label" stroke="#777" />
-              <YAxis stroke="#777" />
+              <XAxis dataKey="label" stroke="#a1a1aa" />
+              <YAxis stroke="#a1a1aa" />
               <Tooltip />
-              <Line dataKey="completed" stroke="#b07a1a" strokeWidth={3} />
+              <Line dataKey="completed" stroke="#b0e4cc" strokeWidth={3} />
             </LineChart>
           </ResponsiveContainer>
         </div>

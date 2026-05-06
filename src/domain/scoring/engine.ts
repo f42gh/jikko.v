@@ -43,7 +43,5 @@ export function rankTasks(tasks: Task[], weights: ScoreWeights = defaultScoreWei
 }
 
 function buildWhyNowSummary(task: Task, priorityScore: number, expectedRoi: number): string {
-  return `${task.title} has a high near-term upside, a meaningful penalty for delay, and a strong momentum payoff. Score ${priorityScore.toFixed(
-    2,
-  )}, expected ROI ${expectedRoi.toFixed(2)}.`;
+  return `今やる価値が高い。スコア ${priorityScore.toFixed(2)} / ROI ${expectedRoi.toFixed(2)}`;
 }
