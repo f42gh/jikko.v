@@ -7,6 +7,7 @@ import type { Recommendation, ScoreWeights } from "../domain/scoring/types";
 import { selectNextTask } from "../domain/planning/select-next";
 import { buildHistoryMetrics } from "../domain/history/metrics";
 import type { SeedData, TaskEvent } from "../infra/db/types";
+import { tasksRepository } from "../infra/db/repositories/tasks-repository";
 
 type HistoryMetrics = ReturnType<typeof buildHistoryMetrics>;
 
@@ -18,10 +19,10 @@ type TaskState = {
   rankedTasks: Recommendation[];
   recommendation: Recommendation | null;
   historyMetrics: HistoryMetrics;
-  initialize: (seedData: SeedData) => Promise<void>;
-  addTask: (input: CreateTaskInput) => void;
-  startTask: (taskId: string) => void;
-  completeTask: (taskId: string) => void;
+  initialize: () => Promise<void>;
+  addTask: (input: CreateTaskInput) => Promise<void>;
+  startTask: (taskId: string) => Promise<void>;
+  completeTask: (taskId: string) => Promise<void>;
   updateWeight: (key: string, value: number) => void;
 };
 
@@ -35,7 +36,8 @@ export const useTaskStore = create<TaskState>((set, get) => ({
   rankedTasks: [],
   recommendation: null,
   historyMetrics: emptyHistoryMetrics,
-  initialize: async (seedData) => {
+  initialize: async () => {
+    const seedData = await tasksRepository.load();
     const rankedTasks = rankTasks(seedData.tasks, defaultScoreWeights);
     set({
       isReady: true,
@@ -46,25 +48,36 @@ export const useTaskStore = create<TaskState>((set, get) => ({
       historyMetrics: buildHistoryMetrics(seedData.events, rankedTasks),
     });
   },
-  addTask: (input) => {
+  addTask: async (input) => {
     const task = createTask(input);
+    const event = createEvent(task.id, "created");
+    await tasksRepository.createTask(task, event);
     const nextTasks = [...get().tasks, task];
-    recompute(set, get, nextTasks, [
-      ...get().events,
-      createEvent(task.id, "created"),
-    ]);
+    recompute(set, get, nextTasks, [...get().events, event]);
   },
-  startTask: (taskId) => {
-    const nextTasks = get().tasks.map((task) =>
-      task.id === taskId ? withStatus(task, "in_progress") : task,
-    );
-    recompute(set, get, nextTasks, [...get().events, createEvent(taskId, "started")]);
+  startTask: async (taskId) => {
+    const currentTask = get().tasks.find((task) => task.id === taskId);
+    if (!currentTask) {
+      return;
+    }
+
+    const updatedTask = withStatus(currentTask, "in_progress");
+    const event = createEvent(taskId, "started");
+    await tasksRepository.updateTask(updatedTask, event);
+    const nextTasks = get().tasks.map((task) => (task.id === taskId ? updatedTask : task));
+    recompute(set, get, nextTasks, [...get().events, event]);
   },
-  completeTask: (taskId) => {
-    const nextTasks = get().tasks.map((task) =>
-      task.id === taskId ? withStatus(task, "done") : task,
-    );
-    recompute(set, get, nextTasks, [...get().events, createEvent(taskId, "completed")]);
+  completeTask: async (taskId) => {
+    const currentTask = get().tasks.find((task) => task.id === taskId);
+    if (!currentTask) {
+      return;
+    }
+
+    const updatedTask = withStatus(currentTask, "done");
+    const event = createEvent(taskId, "completed");
+    await tasksRepository.updateTask(updatedTask, event);
+    const nextTasks = get().tasks.map((task) => (task.id === taskId ? updatedTask : task));
+    recompute(set, get, nextTasks, [...get().events, event]);
   },
   updateWeight: (key, value) => {
     const weights = {

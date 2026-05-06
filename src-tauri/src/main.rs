@@ -153,7 +153,7 @@ fn main() {
                 .path()
                 .app_data_dir()
                 .map_err(|error| std::io::Error::new(std::io::ErrorKind::Other, error.to_string()))?;
-            let db_path = data_dir.join("jikko.sqlite");
+            let db_path = data_dir.join("local-data.sqlite");
             app.manage(DbPath { path: db_path });
             Ok(())
         })

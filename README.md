@@ -2,22 +2,26 @@
 
 jikko は、単なる Todo アプリではなく、`今やるべきことを明確にし、納得感のある理由とともに着手を支援する` ためのローカルファーストアプリです。
 
-このリポジトリには、v1 の技術要件に沿った `Tauri + React + TypeScript + SQLite` ベースの土台実装が入っています。
+このリポジトリには、`Tauri + React + TypeScript + SQLite` ベースで組んだ、`v0.2.1` 時点のローカルファースト実装が入っています。
 
 ## 現在の状態
 
-現時点では、次の土台が実装されています。
+現時点では、次が実装されています。
 
 - `Tauri` によるデスクトップアプリ基盤
 - `React + TypeScript + Vite` によるフロントエンド
 - `Tailwind CSS` による UI スタイリング
-- `SQLite + Drizzle ORM` を前提とした DB スキーマ
+- `SQLite + Drizzle ORM` を使った永続化
 - 決定論的な優先順位エンジンの初版
-- `Now / Inbox / Plan / History / Settings` の主要画面骨格
+- `Now / Inbox / Plan / History / Settings` の主要画面
 - `Vitest` による優先順位ロジックのテスト
 - `Playwright` の E2E 雛形
+- `.app` バンドル生成
 
-ただし、現状の UI はまだ `seedDemoData` を利用して動く段階です。永続 DB との完全接続は次の実装フェーズです。
+初回起動時は `seedDemoData` を投入しますが、その後の編集内容は保持されます。
+
+- `localhost` では `localStorage`
+- `Tauri` アプリでは `SQLite`
 
 ## 設計文書
 
@@ -25,12 +29,14 @@ jikko は、単なる Todo アプリではなく、`今やるべきことを明�
 
 - [TECH_STACK.md](./TECH_STACK.md)
   - 正式な技術要件定義書
-- [design_01.md](./design_01.md)
-  - v1 の設計図
+- [DESIGN.md](./DESIGN.md)
+  - 現在の設計メモ
 - [BRIDGE.md](./BRIDGE.md)
   - ユーザ意図と実装判断をつなぐための運用文書
 - [jikko.md](./jikko.md)
   - プロダクトの原案メモ
+- [v0-2.md](./v0-2.md)
+  - v0.2 系で詰める論点メモ
 
 ## 採用技術
 
@@ -146,7 +152,7 @@ npm run db:migrate
 
 ### 1. 優先順位エンジン
 
-`src/domain/scoring/engine.ts` に、決定論的なスコア計算の初版があります。
+`src/domain/scoring/engine.ts` に、決定論的なスコア計算があります。
 
 現在の入力要素:
 
@@ -169,11 +175,11 @@ npm run db:migrate
 現在の主要画面は次です。
 
 - `Now`
-  - 今やるべきタスクを 1 件提示
+  - OODA タイムライン上で今やるべきタスクを 1 件提示
 - `Inbox`
   - タスク追加
 - `Plan`
-  - ランキング一覧
+  - 候補比較
 - `History`
   - 完了数、擬似 ROI、トレンド表示
 - `Settings`
@@ -186,19 +192,19 @@ npm run db:migrate
 - ローカル SQLite ファイルの初期化
 - 必要テーブルの作成
 - SQL 実行用コマンドの公開
+- アプリデータ配下への `local-data.sqlite` 配置
 
 ## 現在の制約
 
 現時点では、次はまだ未完成です。
 
-- UI と SQLite 永続化の本接続
-- `task_events` と `task_score_snapshots` の完全保存
+- `task_score_snapshots` の保存
 - 実データに基づく履歴分析
 - ローカル通知
 - バックアップ/エクスポート
 - AI 補助機能
 
-つまり、`設計に沿った骨格は揃っているが、永続化と中核ループの配線はまだ途中` です。
+つまり、`個人利用のループは回り始めているが、分析と周辺機能はまだこれから` という段階です。
 
 ## 確認済みのこと
 
@@ -207,16 +213,17 @@ npm run db:migrate
 - `npm test`
 - `npm run build`
 - `cargo check --manifest-path src-tauri/Cargo.toml`
+- `npm run tauri build -- --bundles app`
 
 ## 次にやること
 
 優先度の高い次工程は次です。
 
-1. `task-store` を seed 依存から SQLite 永続化へ切り替える
-2. `task_events` と `task_score_snapshots` を実保存する
-3. `Now` 画面の推奨結果を DB ベースで再計算する
-4. 完了イベントと `History` を実データ接続する
-5. `npm run tauri dev` で実運用に近い流れを固める
+1. `History` を実データ前提で磨く
+2. `task_score_snapshots` の保存を入れる
+3. `Now` と `Plan` の操作導線をさらに絞る
+4. 階層タスクの仕様を整理する
+5. バックアップ/エクスポート方針を決める
 
 ## 方針
 

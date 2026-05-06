@@ -1,6 +1,6 @@
 [package]
 name = "jikko"
-version = "0.1.0"
+version = "0.2.1"
 description = "jikko local-first task prioritization app"
 authors = ["f42"]
 edition = "2021"

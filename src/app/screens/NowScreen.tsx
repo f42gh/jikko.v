@@ -45,8 +45,8 @@ export function NowScreen() {
               </div>
               <div className="pointer-events-none absolute left-6 right-6 top-[3.2rem] hidden md:grid md:grid-cols-4">
                 {oodaStages.map((stage) => (
-                  <div className="text-center text-[10px] tracking-[0.22em] text-white/18" key={stage.id + stage.label}>
-                    {stage.label}
+                  <div className="text-center text-[10px] tracking-[0.22em] text-white/18" key={stage.id + stage.shortLabel}>
+                    {stage.shortLabel}
                   </div>
                 ))}
               </div>
@@ -68,12 +68,14 @@ export function NowScreen() {
                 <div className="relative z-10 rounded-[1.9rem] border border-accent/28 bg-[linear-gradient(180deg,rgba(176,228,204,0.14),rgba(255,255,255,0.03))] px-5 py-5 text-center shadow-card backdrop-blur-xl md:px-8 md:py-7">
                   <div className="flex items-center justify-between text-[10px] tracking-[0.22em] text-white/28">
                     <span>cursor</span>
-                    <span>{currentStage.label}</span>
+                    <span>{currentStage.shortLabel}</span>
                   </div>
                   <h2 className="mt-10 font-display text-[clamp(3rem,7vw,6rem)] leading-[0.92] text-ink">
                     {task.title}
                   </h2>
-                  <p className="mt-5 text-xs tracking-[0.2em] text-white/28">{currentStage.note}</p>
+                  <p className="mt-5 text-xs tracking-[0.18em] text-white/28">
+                    {currentStage.shortLabel} / {currentStage.labelEn}
+                  </p>
                 </div>
 
                 <div className="hidden space-y-2 md:block">
@@ -199,7 +201,8 @@ function OodaIsland({
           {stateLabel(state)}
         </span>
       </div>
-      <p className="mt-4 text-sm font-semibold text-ink">{stage.label}</p>
+      <p className="mt-4 text-sm font-semibold text-ink">{stage.shortLabel}</p>
+      <p className="mt-1 text-[10px] tracking-[0.16em] text-white/26">{stage.labelEn}</p>
       <p className="mt-1 text-[11px] leading-5 text-white/30">{stage.note}</p>
     </div>
   );
@@ -214,7 +217,7 @@ function CompactStage({
 }) {
   return (
     <div className={`rounded-full border px-3 py-2 text-xs ${state === "active" ? "border-accent/35 bg-accent/10 text-ink" : "border-white/10 bg-white/[0.04] text-white/58"}`}>
-      {stage.label}
+      {stage.shortLabel}
     </div>
   );
 }
@@ -246,22 +249,26 @@ function statusLabel(status: string) {
 const oodaStages = [
   {
     id: "O",
-    label: "観測",
+    shortLabel: "観測",
+    labelEn: "Observe",
     note: "候補と状況を見つめる",
   },
   {
     id: "O",
-    label: "文脈化",
+    shortLabel: "文脈化",
+    labelEn: "Orient",
     note: "重みと指数で文脈をそろえる",
   },
   {
     id: "D",
-    label: "決定",
+    shortLabel: "決定",
+    labelEn: "Decide",
     note: "いま実行する 1 件へ絞る",
   },
   {
     id: "A",
-    label: "実行",
+    shortLabel: "実行",
+    labelEn: "Act",
     note: "着手して完了まで進める",
   },
 ] as const;
