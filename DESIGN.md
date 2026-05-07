@@ -1,438 +1,136 @@
-# jikko Design 01
+# jikko デザイン
 
-## Document Role
+## プロダクトビジョン
 
-This document is the first implementation blueprint for jikko v1.
+jikko は汎用 Todo アプリではない。
 
-Its goals are:
+約束：
 
-- protect the product core
-- reconsider the tech stack as a whole
-- make implementation order and responsibilities explicit
-- define a foundation that can grow without collapsing
+- 「今やるべきこと」を 1 件、明確に提示する
+- なぜ今それをやるべきかを説明し、納得感を生む
+- 着手・完了の摩擦を極限まで下げる
+- 完了を自信・ROI・長期リターンの実感に変換する
 
-## Reconfirming the Assumptions
+行動経済学と認知科学の知見を使い、タスクへの着手と完了を最大限に支援する：
 
-jikko operates under assumptions that differ significantly from a typical SaaS todo app.
+- 「このタスクをやらないことで生じる損失」を可視化する
+- 「今やることで次のモメンタムが生まれる」という連鎖を示す
+- 完了履歴を投資リターン分析として返し、自信を積み上げる
 
-- There will be a single user for the foreseeable future.
-- Authentication is unnecessary.
-- Data should be stored locally.
-- The highest-value outcome is reduced cognitive load.
-- The product is not centered on task storage, but on deciding what should be done now.
-- The product scope includes task decomposition, prioritization, start support, completion reward, and ROI visibility.
+OODA ループを形式化し、思考から行動への回路を仕組みとして提供する。
 
-If these assumptions are taken seriously, the earlier `Next.js + Clerk + hosted DB` direction is heavier than v1 requires.
+## 前提
 
-## Reconsidered Conclusion
+- 当面のユーザは 1 人
+- v1 では認証不要
+- データはローカルで保持・管理する
+- 認知負荷の最小化が最優先
+- タスクは実行可能な最小単位まで分割する
+- タスク分解自体がプロダクトループの一部（OODA の Observe に相当）
 
-The best v1 starting point is a `local-first desktop application`.
+## 設計原則
 
-Recommended stack:
+1. 見えているのは、その瞬間に必要なものだけ
+2. 非言語的に認識できることを最優先（位置・サイズ・余白・色で意味を伝える）
+3. 読まないとわからない UI を避ける
+4. 優先順位決定は説明可能かつ再現可能
+5. AI に中核判断を委ねない
+6. あらゆる機能が中核ループを強化すること
 
-- Runtime: `Tauri`
-- Frontend: `React` + `TypeScript` + `Vite`
-- UI: `Tailwind CSS`
-- Local database: `SQLite`
-- Database access: `Drizzle ORM`
-- State management: `Zustand`
-- Forms: `React Hook Form` + `Zod`
-- Charts: `Recharts`
-- Unit/integration testing: `Vitest`
-- E2E testing: `Playwright`
-- Priority engine: deterministic rule-based logic implemented in TypeScript
-- AI: optional in v1, never used for authoritative prioritization
-- Optional analysis helper: Python subprocess invoked from Tauri on refresh
+## 中核ループ
 
-## Why This Conclusion
+1. タスクを追加する（observe）
+2. 文脈と重みを付与する（orient）
+3. 優先順位を算出し、今やるべき 1 件を選定する
+4. 推奨理由を提示する
+5. 着手を促進する（act）
+6. 完了を記録し、報酬感と進捗を返す（done）
+7. 履歴から ROI と成長実感を可視化する
 
-### Why Tauri instead of Next.js
+## OODA ライフサイクル
 
-`Next.js` is strong for web products, but it introduces avoidable friction for jikko v1.
+Task の status は OODA の正式なライフサイクルとして扱う。
 
-- It tends to pull the project toward web-service assumptions even though auth is unnecessary.
-- Using a local database naturally often requires a local server or awkward architecture.
-- Distribution and persistence are less direct for a single-user personal application.
+### ステータス定義
 
-`Tauri` fits more naturally because it allows:
+- **observe** — 思考を始める前の置き場。入力は title と observeMemo だけ。ランキング対象に入れない
+- **orient** — 文脈と重みづけを与える段階。roiScore と estimatedMinutes をここで決める。orient 済みタスクだけをランキングに通す
+- **act** — 実行中。actStartedAt と actDueAt を持つ。同時に act になれるタスクは 1 件だけ
+- **done** — act を経由したタスクだけが到達できる
 
-- direct use of local SQLite
-- a personal app model without auth
-- easier future support for local notifications and file export
-- a standard React/TypeScript UI workflow
+「decide」は永続的な status ではなく、orient タスクのランキング処理として実装する。
 
-### Why SQLite
+### 時間切れルール
 
-`SQLite` matches the current product assumptions well.
+actDueAt を過ぎたタスクは `act_timed_out` イベントを記録して orient に戻す。
+これは失敗ではなく、再見積もりと分割統治の入口として扱う。
+戻るときは progressNote を保持し、次の判断材料として使う。
 
-- It is excellent for single-user applications.
-- Setup is minimal.
-- Backup and migration thinking stays simple.
-- It is fully capable of handling tasks, scores, history, and event logs for v1.
+### 入力責務の分離
 
-`PostgreSQL` can be reconsidered later if cloud sync or multi-device access becomes a real product need.
+- **observe 入力** — 判断を要求しない。文字量を最小にし、まず置けることを優先する
+- **orient 入力** — タスクの意味づけをする。roiScore と estimatedMinutes だけに絞る
+- **act 中** — 実行そのものに集中する。メモは痕跡として残せる
 
-### Why Drizzle instead of Prisma
+## スコアリング設計
 
-`Prisma` is workable, but `Drizzle` is a better fit for this v1.
+### 哲学
 
-- It stays closer to SQLite.
-- It keeps the stack lighter.
-- Schema and SQL remain easier to reason about.
-- It feels more natural inside a local application.
+スコアは「今やる理由」を数値化したもの。ブラックボックスにしない。
 
-For this MVP, ease of local operation matters more than a higher-level ORM abstraction.
+### 入力
 
-## Design Principles
+- `roiScore` — 1〜5 のユーザ評価（見返り・重要性の主観的判断）
+- `estimatedMinutes` — 10 / 25 / 45 / 90 分の 4 択
 
-The product should follow these principles:
-
-1. Do not make the user think more than necessary.
-2. Priority decisions must be explainable.
-3. Core logic must not be delegated to AI.
-4. Starting tasks matters more than collecting tasks.
-5. Completion should produce a strong sense of reward.
-6. Every feature should strengthen the core loop.
-
-## Core Loop for v1
-
-The main loop for v1 is:
-
-1. Add a task.
-2. Decompose it into executable minimum units.
-3. Capture the structured factors needed for evaluation.
-4. Score tasks and choose a single best next action.
-5. Show why that task should be done now.
-6. Make starting easy.
-7. Record completion and return reward plus progress.
-8. Use history to show ROI and growth.
-
-## System Structure
-
-v1 should be a modular monolith in a single repository.
-
-Proposed structure:
-
-- `app`
-  - screens, routing, UI components
-- `domain/tasks`
-  - tasks, decomposition, dependency relations, status transitions
-- `domain/scoring`
-  - priority calculation, explanation generation, ROI estimation
-- `domain/behavior`
-  - start support, reward design, completion feedback
-- `domain/history`
-  - completion history, streaks, reflection inputs
-- `domain/planning`
-  - daily recommendation, next-action selection, reevaluation
-- `domain/analysis`
-  - estimation gap diagnostics, helper-process handoff, analysis suggestions
-- `infra/db`
-  - SQLite, migrations, repositories
-- `infra/system`
-  - Tauri integration, notifications, file import/export, helper-process invocation
-
-## Analysis Helper Process
-
-The analysis layer can become more compute-heavy than the core scoring loop.
-
-To keep v1 light without blocking future experimentation, jikko may invoke an optional `Python` helper process from `Tauri` only when analysis is refreshed.
-
-Rules:
-
-- core prioritization remains deterministic in TypeScript
-- Python is limited to secondary analysis, diagnostics, and future scheduling experiments
-- the helper process is request/response, not a permanent realtime backend
-- if the helper is unavailable, the TypeScript analysis path remains the fallback
-
-This preserves the local-first simplicity while leaving room for `pandas`, `numpy`, and future ROI or scheduling experiments.
-
-## Screen Design Basics
-
-Do not create too many screens.
-
-Primary v1 screens:
-
-1. `Now`
-   - the highest-priority screen, showing exactly one recommended task
-2. `Inbox`
-   - a place to add tasks and break them down
-3. `Plan`
-   - a view of today's candidates and why they rank as they do
-4. `History`
-   - completion history, streaks, ROI, and perceived rewards
-5. `Settings`
-   - only minimal controls such as weights and backup settings
-
-`Now` is the most important screen.
-
-It should prioritize:
-
-- one clearly recommended task
-- a short, convincing rationale
-- an obvious action to start
-- a natural next step after completion
-
-## Data Model
-
-The main v1 tables should be:
-
-### tasks
-
-- id
-- title
-- description
-- status
-- parent_task_id
-- effort_estimate
-- urgency
-- impact
-- penalty_of_delay
-- momentum_gain
-- emotional_resistance
-- energy_required
-- due_at
-- created_at
-- updated_at
-
-### task_score_snapshots
-
-- id
-- task_id
-- priority_score
-- expected_roi
-- score_breakdown_json
-- why_now_summary
-- created_at
-
-### task_events
-
-- id
-- task_id
-- event_type
-- payload_json
-- created_at
-
-Expected `event_type` values:
-
-- created
-- decomposed
-- recommended
-- started
-- completed
-- skipped
-- snoozed
-
-### daily_recommendations
-
-- id
-- date
-- recommended_task_id
-- rationale_json
-- created_at
-
-### reward_records
-
-- id
-- task_id
-- reward_type
-- reward_value
-- note
-- created_at
-
-### reflections
-
-- id
-- task_id
-- actual_benefit
-- perceived_difficulty
-- confidence_gain
-- memo
-- created_at
-
-## Scoring Design
-
-Scoring is the center of v1.
-
-It should not be handed to AI.
-
-Input factors:
-
-- urgency
-- impact
-- penalty_of_delay
-- momentum_gain
-- effort_estimate
-- emotional_resistance
-- energy_required
-- proximity of `due_at`
-
-Outputs:
-
-- `priority_score`
-- `expected_roi`
-- `why_now_summary`
-
-Rules:
-
-- scoring must be deterministic
-- factors should be understandable to the user
-- rationale text should be derived from score breakdowns
-- both "loss of delay" and "benefit of acting now" should be visible
-
-Example initial formula:
+### 計算式（現行）
 
 ```ts
-priority =
-  urgency * 0.25 +
-  impact * 0.25 +
-  penaltyOfDelay * 0.20 +
-  momentumGain * 0.15 -
-  effortEstimate * 0.10 -
-  emotionalResistance * 0.05;
+effortPenalty = max(1, estimatedMinutes / 25)
+priorityScore = roiScore * weights.roi - effortPenalty * weights.effortPenalty
+expectedRoi   = roi / max(effortPenalty, 0.5)
 ```
 
-This is not final. It is an intentionally simple baseline that is easy to test and tune.
+### 出力
 
-## AI Usage
+- `priorityScore` — ランキング基準値
+- `expectedRoi` — リターン効率
+- `whyNowSummary` — 表示用の理由文
 
-AI should not make core decisions in v1.
+### 設計原則
 
-Acceptable uses:
+- 決定論的：同一入力で同一結果
+- 利用者が理解できる入力要素だけを使う
+- AI に最終スコアを委ねない
+- 将来の多因子モデルへの拡張を妨げない構造を保つ
 
-- rewriting task wording
-- suggesting decomposition ideas
-- drafting reflection text after completion
-- smoothing explanation phrasing
+## 現在の画面構造（Svelte proto）
 
-Unacceptable uses:
+単一の `App.svelte` で中核ループを実装している。
 
-- final priority decisions
-- black-box scoring
-- empty motivational language without evidence
+- **hero** — 選択タスクの詳細。ROI・時間設定・メモ入力。開始／完了ボタン
+- **observe dock** — observe 状態のタスク一覧とキャプチャ入力フォーム
+- **rank dock** — orient 済みタスクのスコア順ランキング
 
-The reason is simple: jikko's value depends on trustworthy prioritization.
+## UX ドグマ
 
-## State Management
+このドグマに反する便利機能は、試作段階では後回しにする。
 
-State should be separated into three layers:
+- 非言語的に認識できることを最優先にする
+- 説明文より先に、密度・位置・サイズ・余白・色の温度差で意味を伝える
+- 触る前から役割が分かる面を優先し、読まないとわからない UI を避ける
+- 文字は操作・状態・判断に本当に必要なものだけに絞る
+- 強調色はユーザの注意を向ける最小限の場所だけに使い、装飾として乱用しない
+- パーツ数と分岐数を減らし、判断箇所そのものを減らす
+- 見通しの良さを「分割したファイル数」で偽装しない
+- 1 画面で中核ループを見渡せることを優先する
+- 画面の都合で状態を増やさない
 
-1. Persistent state
-   - tasks, history, scores, settings stored in SQLite
-2. Session state
-   - selected task, in-progress decomposition, UI mode
-3. Derived state
-   - best next task, ranking results, display summaries
+## v1 で避けるもの
 
-`Zustand` should be used for session and derived state.
-
-The database should remain the single source of truth for persisted data.
-
-## Non-Functional Requirements
-
-v1 should satisfy these requirements:
-
-- fast startup
-- full offline operation
-- easy local backup
-- reproducible score calculation
-- easy schema migration
-- preference for immediacy over page-heavy flows
-
-## What v1 Should Not Do
-
-These items should be explicitly deferred:
-
-- multi-user support
-- account management
-- cloud sync
-- mobile-native apps
-- real-time collaboration
-- black-box AI prioritization
-- complex notification rule engines
-
-## Implementation Order
-
-### Phase 1: Foundation
-
-- bootstrap Tauri + React + TypeScript
-- add Tailwind
-- initialize SQLite + Drizzle
-- create basic routing
-
-### Phase 2: Core Data
-
-- build `tasks`
-- build `task_events`
-- build `task_score_snapshots`
-- implement basic CRUD
-- implement task decomposition
-
-### Phase 3: Priority Engine
-
-- implement scoring functions
-- show score breakdowns
-- build the `Now` screen
-- generate rationale summaries
-
-### Phase 4: Behavior Support
-
-- add start actions
-- record start/completion events
-- add reward feedback on completion
-- connect completion to the next recommended action
-
-### Phase 5: History and ROI
-
-- build the `History` screen
-- show streaks
-- show completion trends
-- visualize ROI
-
-### Phase 6: Supporting Features
-
-- local notifications
-- backup/export
-- experimental AI assistance
-
-## The Largest Design Decision
-
-The biggest decision from this reconsideration is:
-
-`jikko should not start as a SaaS product; it should start as a local personal application`
-
-That choice simplifies the system materially:
-
-- auth disappears
-- hosted DB disappears
-- external analytics dependencies disappear
-- implementation can focus on the product core
-
-## What This Design Lets Us Validate
-
-This design keeps the team focused on the questions that actually matter for v1:
-
-- Will the user trust the recommended next task?
-- Does task decomposition improve initiation rate?
-- Does the rationale create conviction?
-- Does the reward design improve continuation?
-- Does ROI visibility rebuild confidence?
-
-If these questions are answered well, web distribution, sync, and multi-user support can be considered later.
-
-## Final Decision
-
-The v1 stack should be:
-
-- Runtime: `Tauri`
-- UI: `React` + `TypeScript` + `Vite` + `Tailwind CSS`
-- Database: `SQLite`
-- DB layer: `Drizzle ORM`
-- Validation: `Zod`
-- State management: `Zustand`
-- Charts: `Recharts`
-- Testing: `Vitest` + `Playwright`
-- Prioritization: deterministic rule-based logic
-- AI: auxiliary use only
-
-This is the most coherent technical direction for jikko as currently defined.
+- 複数ユーザ対応・クラウド同期・SaaS 前提の構成
+- 不透明な AI 優先順位付け
+- フィルタ過多・設定過多の UI
+- モバイルネイティブ先行
+- マイクロサービス分割
+- 毎回ユーザ自身に優先順位を深く考えさせる体験

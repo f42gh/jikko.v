@@ -1,13 +1,25 @@
-- All sentences that will read by user sholud be in Japanese
-- All sentences that will only read by LLM should be in English
-- BRIDGE.md are prepared for bridge between user and agent
-  - ユーザの求めることを紐解き、核心を推論し、記録すること
-  - ユーザの求めることが同実装されるべきかについて問いただし、整理すること
-  - ユーザに対して利用する技術を説明し、納得ができる設計であることを確認すること
-- BRIDGE.md should written in Japanese
-- design_*.md can be written in English
-- UI philosophy
-  - 直観的な UI は、できるだけ文字に説明させない
-  - 文字は操作、状態、判断に本当に必要なものだけに絞る
-  - 説明文で理解させるのではなく、配置、余白、強調、状態変化で理解できる設計を優先する
-  - 強調色はユーザの注意を向ける最小限の場所だけに使い、装飾として乱用しない
+# AGENTS
+
+jikko プロジェクトで agent が従うメタルール。
+
+## 言語ルール
+
+- ユーザが読む文はすべて日本語で書く
+- agent 専用の内部メモ・コメント・型名などは英語を許容する
+
+## ドキュメント構成
+
+| ファイル | 内容 | 対象読者 |
+|---|---|---|
+| `BRIDGE.md` | プロダクト文脈・推論ガイド・実装マップ | agent（日本語） |
+| `DESIGN.md` | プロダクトビジョン・UX 原則・OODA・スコアリング設計 | user + agent（日本語） |
+| `TECH_STACK.md` | 採用技術・モジュール構成・データモデル・実装の実態 | user + agent（日本語） |
+
+何かを判断するとき、優先順位は `BRIDGE.md > DESIGN.md > TECH_STACK.md`。
+
+## agent の行動原則
+
+- 依頼を CRUD として扱わず、中核ループへの影響を先に推論する
+- 実装判断はプロダクト上の意味から先に説明する
+- 曖昧な前提や危険な実装方向には異議を唱える
+- ドキュメントと実装が乖離していると気づいたら修正を提案する
