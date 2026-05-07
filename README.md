@@ -1,93 +1,77 @@
 # jikko
 
-jikko は、単なる Todo アプリではなく、`今やるべきことを明確にし、納得感のある理由とともに着手を支援する` ためのローカルファーストアプリです。
+jikko は、`今やるべきことを 1 件に絞って着手を助ける` ローカルファーストのデスクトップアプリです。
 
-このリポジトリには、`Tauri + React + TypeScript + SQLite` ベースで組んだ、`v0.2.1` 時点のローカルファースト実装が入っています。
+汎用 Todo アプリのように情報を並べることより、次の 1 手を迷わず選べることを優先します。  
+タスクを OODA の流れで扱い、`observe -> orient -> act -> done` の中核ループを軽く回し続けることを目標にしています。
 
-## 現在の状態
+## 何をするアプリか
 
-現時点では、次が実装されています。
+jikko の約束は次です。
 
-- `Tauri` によるデスクトップアプリ基盤
-- `React + TypeScript + Vite` によるフロントエンド
-- `Tailwind CSS` による UI スタイリング
-- `SQLite + Drizzle ORM` を使った永続化
-- 決定論的な優先順位エンジンの初版
-- `Now / Inbox / Plan / History / Settings` の主要画面
-- `Vitest` による優先順位ロジックのテスト
-- `Playwright` の E2E 雛形
-- `.app` バンドル生成
+- 今やるべきことを 1 件だけ前に出す
+- なぜ今それをやるのかを、理解できる基準で示す
+- 着手と完了の摩擦を下げる
+- 完了履歴を自信と ROI の実感に変える
 
-初回起動時は `seedDemoData` を投入しますが、その後の編集内容は保持されます。
+現在の UI は、1 画面の Svelte proto として構成されています。
 
-- `localhost` では `localStorage`
-- `Tauri` アプリでは `SQLite`
+- `hero`
+  - いま注目している 1 件を表示し、ROI・見積もり時間・メモ・開始/完了を扱う
+- `observe dock`
+  - まだ意味づけ前のタスク置き場
+- `rank dock`
+  - orient 済みタスクを優先順位順に並べる
 
-## 設計文書
+## 現在の技術構成
 
-このリポジトリでは、次の文書を基準にしています。
-
-- [TECH_STACK.md](./TECH_STACK.md)
-  - 正式な技術要件定義書
-- [DESIGN.md](./DESIGN.md)
-  - 現在の設計メモ
-- [BRIDGE.md](./BRIDGE.md)
-  - ユーザ意図と実装判断をつなぐための運用文書
-- [jikko.md](./jikko.md)
-  - プロダクトの原案メモ
-- [v0-2.md](./v0-2.md)
-  - v0.2 系で詰める論点メモ
-
-## 採用技術
-
-v1 の正式採用技術は次です。
-
-- Runtime: `Tauri`
-- Frontend: `React` + `TypeScript` + `Vite`
-- UI: `Tailwind CSS`
-- Database: `SQLite`
-- DB layer: `Drizzle ORM`
+- Desktop runtime: `Tauri`
+- Frontend: `Svelte 4` + `TypeScript` + `Vite`
+- Styling: カスタム CSS
+- Persistence: `SQLite` + `Drizzle ORM`
 - Validation: `Zod`
-- Forms: `React Hook Form`
-- State management: `Zustand`
-- Charts: `Recharts`
-- Testing: `Vitest` + `Playwright`
+- Tests: `Vitest` + `Playwright`
+- Analysis helper: `Python` を Tauri 経由で単発実行
 
-## ディレクトリ構成
+Web で起動したときは `localStorage`、Tauri で起動したときは `SQLite` を使います。
 
-主要構成は次です。
+## 中核ループ
+
+1. タスクを追加する `observe`
+2. ROI と見積もり時間を与える `orient`
+3. 優先順位を計算して、今やるべき 1 件を選ぶ
+4. 着手する `act`
+5. 完了または時間切れを記録する
+6. 履歴を次の判断に返す
+
+優先順位計算は決定論的です。現行の主入力は次の 2 つです。
+
+- `roiScore` - 1 から 5
+- `estimatedMinutes` - `10 / 25 / 45 / 90`
+
+詳細な設計意図は [DESIGN.md](/Users/f42/dev/jikko.v/DESIGN.md) と [BRIDGE.md](/Users/f42/dev/jikko.v/BRIDGE.md) を参照してください。
+
+## 主要ファイル
 
 ```text
 src/
   app/
-    components/
-    screens/
+    App.svelte        # 現行 UI
+    proto-state.ts    # Svelte stores と状態遷移
   domain/
-    tasks/
-    scoring/
-    history/
-    planning/
+    tasks/            # Task 型と生成
+    scoring/          # 優先順位計算
+    planning/         # 次にやる 1 件の選定
+    history/          # 履歴集計
+    analysis/         # 見積もり差分分析
   infra/
-    db/
-    system/
-  state/
+    db/               # SQLite / Drizzle
+    system/           # Tauri と補助プロセス連携
 src-tauri/
-  src/
-  capabilities/
+  src/main.rs         # デスクトップホスト
 ```
 
-責務は次のとおりです。
-
-- `src/app`
-  - 画面、レイアウト、UI コンポーネント
-- `src/domain`
-  - 中核ロジック
-- `src/infra`
-  - DB、Tauri 連携、外部境界
-- `src/state`
-  - セッション状態と導出状態
-- `src-tauri`
-  - デスクトップホスト、SQLite 実行、アプリ設定
+設計と実装の対応づけは [TECH_STACK.md](/Users/f42/dev/jikko.v/TECH_STACK.md) にまとめています。
 
 ## セットアップ
 
@@ -98,7 +82,7 @@ src-tauri/
 - Rust
 - Cargo
 
-依存インストール:
+依存を入れます。
 
 ```bash
 npm install
@@ -106,134 +90,56 @@ npm install
 
 ## 開発コマンド
 
-Web フロントの開発サーバ:
+Web 開発サーバ:
 
 ```bash
 npm run dev
 ```
 
-Tauri アプリの起動:
+Tauri アプリ起動:
 
 ```bash
 npm run tauri dev
 ```
 
-フロントエンドのビルド:
+ビルド:
 
 ```bash
 npm run build
 ```
 
-単体テスト:
+unit test:
 
 ```bash
 npm test
 ```
 
-E2E テスト:
+E2E test:
 
 ```bash
 npm run e2e
 ```
 
-Drizzle のコード生成:
+Playwright のブラウザが未導入なら、最初に次が必要です。
 
 ```bash
-npm run db:generate
+npx playwright install
 ```
 
-Drizzle マイグレーション:
+## 現状の注意点
 
-```bash
-npm run db:migrate
-```
+- 現行 UI は Svelte proto で、まず中核ループの速さと透明性を優先している
+- DB スキーマには旧設計由来の列が一部残っているが、現行の domain 型では使わない値がある
+- Python 補助分析は補助であり、優先順位決定の本体は TypeScript 側に残している
+- 複数ユーザ、クラウド同期、認証、ブラックボックスな AI 優先順位付けは v1 の対象外
 
-## 実装済みの主な要素
+## 参照文書
 
-### 1. 優先順位エンジン
-
-`src/domain/scoring/engine.ts` に、決定論的なスコア計算があります。
-
-現在の入力要素:
-
-- urgency
-- impact
-- penaltyOfDelay
-- momentumGain
-- effortEstimate
-- emotionalResistance
-- energyRequired
-
-出力:
-
-- `priorityScore`
-- `expectedRoi`
-- `whyNowSummary`
-
-### 2. 主要画面
-
-現在の主要画面は次です。
-
-- `Now`
-  - OODA タイムライン上で今やるべきタスクを 1 件提示
-- `Inbox`
-  - タスク追加
-- `Plan`
-  - 候補比較
-- `History`
-  - 完了数、擬似 ROI、トレンド表示
-- `Settings`
-  - スコア重みの編集
-
-### 3. Tauri ホスト
-
-`src-tauri/src/main.rs` では、次を行っています。
-
-- ローカル SQLite ファイルの初期化
-- 必要テーブルの作成
-- SQL 実行用コマンドの公開
-- アプリデータ配下への `local-data.sqlite` 配置
-
-## 現在の制約
-
-現時点では、次はまだ未完成です。
-
-- `task_score_snapshots` の保存
-- 実データに基づく履歴分析
-- ローカル通知
-- バックアップ/エクスポート
-- AI 補助機能
-
-つまり、`個人利用のループは回り始めているが、分析と周辺機能はまだこれから` という段階です。
-
-## 確認済みのこと
-
-このリポジトリでは、次の確認を実施済みです。
-
-- `npm test`
-- `npm run build`
-- `cargo check --manifest-path src-tauri/Cargo.toml`
-- `npm run tauri build -- --bundles app`
-
-## 次にやること
-
-優先度の高い次工程は次です。
-
-1. `History` を実データ前提で磨く
-2. `task_score_snapshots` の保存を入れる
-3. `Now` と `Plan` の操作導線をさらに絞る
-4. 階層タスクの仕様を整理する
-5. バックアップ/エクスポート方針を決める
-
-## 方針
-
-jikko は、SaaS 前提ではなく `自分専用のローカルアプリ` として始めます。
-
-そのため、初期フェーズでは次を優先します。
-
-- 認知負荷を減らすこと
-- 信頼できる優先順位を出すこと
-- 着手しやすくすること
-- 完了の積み上げを見えるようにすること
-
-複数ユーザ対応、認証、クラウド同期、ブラックボックスな AI 優先順位付けは v1 の対象外です。
+- [BRIDGE.md](/Users/f42/dev/jikko.v/BRIDGE.md)
+  - agent 向けの判断ガイドと実装マップ
+- [DESIGN.md](/Users/f42/dev/jikko.v/DESIGN.md)
+  - プロダクトビジョンと UX 原則
+- [TECH_STACK.md](/Users/f42/dev/jikko.v/TECH_STACK.md)
+  - 採用技術、モジュール構成、データモデル
+- [notes/tauri.md](/Users/f42/dev/jikko.v/notes/tauri.md)
+  - Tauri 実装メモ
