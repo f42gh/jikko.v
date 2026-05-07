@@ -1,55 +1,101 @@
+import { useState } from "react";
 import { useTaskStore } from "../../state/task-store";
+import type { Task } from "../../domain/tasks/types";
 
 export function PlanScreen() {
-  const rankedTasks = useTaskStore((state) => state.rankedTasks);
+  const tasks = useTaskStore((state) => state.tasks);
+  const orientableTasks = tasks.filter((task) => task.status === "observe" || task.status === "orient");
 
   return (
-    <div className="rounded-3xl border border-white/10 bg-white/[0.06] p-6 shadow-card backdrop-blur-xl">
-      <div className="mb-6">
-        <h2 className="font-display text-3xl text-ink">比較して決める</h2>
-        <p className="mt-2 text-sm leading-6 text-white/55">
-          主役はいまの画面です。ここでは、なぜ次点なのかだけを短く確認します。
-        </p>
-      </div>
-      <div className="space-y-4">
-        {rankedTasks.map((recommendation, index) => (
-          <article
-            className="rounded-2xl border border-white/10 bg-zinc-950/75 p-4"
-            key={recommendation.task.id}
-          >
-            <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-              <div className="max-w-3xl">
-                <p className="text-xs uppercase tracking-[0.2em] text-white/40">
-                  {index + 1} 位
-                </p>
-                <h3 className="mt-1 text-xl font-semibold">{recommendation.task.title}</h3>
-                <p className="mt-2 max-w-3xl text-sm leading-6 text-white/60">
-                  {recommendation.whyNowSummary}
-                </p>
-              </div>
-              <div className="grid min-w-[18rem] gap-3 sm:grid-cols-2">
-                <MetricCard
-                  label="ROI"
-                  value={recommendation.expectedRoi.toFixed(2)}
-                />
-                <MetricCard
-                  label="優先度"
-                  value={recommendation.priorityScore.toFixed(2)}
-                />
-              </div>
-            </div>
-          </article>
-        ))}
-      </div>
+    <div className="space-y-3">
+      {orientableTasks.map((task) => (
+        <OrientCard key={task.id} task={task} />
+      ))}
+      {orientableTasks.length === 0 ? (
+        <div className="rounded-3xl border border-dashed border-white/12 px-6 py-10 text-center text-sm text-white/40">
+          何もありません。
+        </div>
+      ) : null}
     </div>
   );
 }
 
-function MetricCard({ label, value }: { label: string; value: string }) {
+function OrientCard({ task }: { task: Task }) {
+  const orientTask = useTaskStore((state) => state.orientTask);
+  const decideNextTask = useTaskStore((state) => state.decideNextTask);
+  const startAct = useTaskStore((state) => state.startAct);
+  const [roiScore, setRoiScore] = useState(task.roiScore ?? 3);
+  const [estimatedMinutes, setEstimatedMinutes] = useState(task.estimatedMinutes ?? 25);
+  const [orientMemo, setOrientMemo] = useState(task.orientMemo);
+
+  const decideAndStart = async () => {
+    await orientTask(task.id, {
+      roiScore,
+      estimatedMinutes,
+      orientMemo,
+    });
+    const decided = await decideNextTask();
+    if (decided) {
+      await startAct(decided.task.id);
+    }
+  };
+
   return (
-    <div className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-right">
-      <p className="text-xs tracking-[0.18em] text-white/40">{label}</p>
-      <p className="mt-2 text-3xl font-semibold text-ink">{value}</p>
-    </div>
+    <article className="rounded-3xl border border-white/10 bg-white/[0.04] p-5 shadow-card backdrop-blur-xl">
+      <div className="flex items-start justify-between gap-4">
+        <div className="min-w-0">
+          <h3 className="text-xl font-semibold text-ink">{task.title}</h3>
+          {task.observeMemo ? <p className="mt-2 text-sm leading-6 text-white/48">{task.observeMemo}</p> : null}
+        </div>
+        <span className="rounded-full border border-white/10 px-2.5 py-1 text-xs text-white/38">
+          {task.status === "observe" ? "Observe" : "Orient"}
+        </span>
+      </div>
+
+      <div className="mt-5 grid gap-4 md:grid-cols-2">
+        <label className="block">
+          <span className="mb-2 block text-sm font-medium">ROI</span>
+          <input
+            className="w-full rounded-2xl border border-white/10 bg-black/60 px-4 py-3 text-ink outline-none transition focus:border-accent/60"
+            max={5}
+            min={1}
+            onChange={(event) => setRoiScore(Number(event.target.value))}
+            step={1}
+            type="number"
+            value={roiScore}
+          />
+        </label>
+        <label className="block">
+          <span className="mb-2 block text-sm font-medium">Time</span>
+          <input
+            className="w-full rounded-2xl border border-white/10 bg-black/60 px-4 py-3 text-ink outline-none transition focus:border-accent/60"
+            min={1}
+            onChange={(event) => setEstimatedMinutes(Number(event.target.value))}
+            step={5}
+            type="number"
+            value={estimatedMinutes}
+          />
+        </label>
+      </div>
+
+      <label className="mt-4 block">
+        <textarea
+          className="min-h-24 w-full rounded-2xl border border-white/10 bg-black/60 px-4 py-3 text-ink outline-none transition focus:border-accent/60"
+          onChange={(event) => setOrientMemo(event.target.value)}
+          placeholder="メモ"
+          value={orientMemo}
+        />
+      </label>
+
+      <div className="mt-5 flex gap-3">
+        <button
+          className="rounded-full border border-accent/35 bg-accent/10 px-5 py-3 text-sm font-semibold text-accent outline-none transition hover:bg-accent/15 focus-visible:ring-1 focus-visible:ring-accent/45"
+          onClick={() => void decideAndStart()}
+          type="button"
+        >
+          進める
+        </button>
+      </div>
+    </article>
   );
 }

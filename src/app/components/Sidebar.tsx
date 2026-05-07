@@ -1,11 +1,10 @@
 import { useAppStore, type ScreenId } from "../../state/app-store";
 
 const items: Array<{ id: ScreenId; label: string }> = [
-  { id: "now", label: "今" },
-  { id: "inbox", label: "入力" },
-  { id: "plan", label: "計画" },
+  { id: "now", label: "Act" },
+  { id: "inbox", label: "Observe" },
+  { id: "plan", label: "Orient" },
   { id: "history", label: "履歴" },
-  { id: "settings", label: "設定" },
 ];
 
 export function Sidebar() {

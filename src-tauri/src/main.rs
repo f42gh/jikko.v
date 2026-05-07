@@ -89,14 +89,23 @@ fn open_connection(path: &PathBuf) -> Result<Connection, String> {
           description TEXT NOT NULL DEFAULT '',
           status TEXT NOT NULL,
           parent_task_id TEXT,
-          effort_estimate INTEGER NOT NULL,
-          urgency INTEGER NOT NULL,
-          impact INTEGER NOT NULL,
-          penalty_of_delay INTEGER NOT NULL,
-          momentum_gain INTEGER NOT NULL,
-          emotional_resistance INTEGER NOT NULL,
-          energy_required INTEGER NOT NULL,
+          effort_estimate INTEGER NOT NULL DEFAULT 3,
+          urgency INTEGER NOT NULL DEFAULT 3,
+          impact INTEGER NOT NULL DEFAULT 3,
+          penalty_of_delay INTEGER NOT NULL DEFAULT 3,
+          momentum_gain INTEGER NOT NULL DEFAULT 3,
+          emotional_resistance INTEGER NOT NULL DEFAULT 2,
+          energy_required INTEGER NOT NULL DEFAULT 3,
           due_at TEXT,
+          observe_memo TEXT NOT NULL DEFAULT '',
+          orient_memo TEXT NOT NULL DEFAULT '',
+          pain_score INTEGER,
+          gain_score INTEGER,
+          deadline_at TEXT,
+          estimated_minutes INTEGER,
+          act_started_at TEXT,
+          act_due_at TEXT,
+          progress_note TEXT NOT NULL DEFAULT '',
           created_at TEXT NOT NULL,
           updated_at TEXT NOT NULL
         );
@@ -143,7 +152,39 @@ fn open_connection(path: &PathBuf) -> Result<Connection, String> {
         ",
     )
     .map_err(|error| error.to_string())?;
+    ensure_column(
+        &conn,
+        "ALTER TABLE tasks ADD COLUMN observe_memo TEXT NOT NULL DEFAULT ''",
+    )?;
+    ensure_column(
+        &conn,
+        "ALTER TABLE tasks ADD COLUMN orient_memo TEXT NOT NULL DEFAULT ''",
+    )?;
+    ensure_column(&conn, "ALTER TABLE tasks ADD COLUMN pain_score INTEGER")?;
+    ensure_column(&conn, "ALTER TABLE tasks ADD COLUMN gain_score INTEGER")?;
+    ensure_column(&conn, "ALTER TABLE tasks ADD COLUMN deadline_at TEXT")?;
+    ensure_column(&conn, "ALTER TABLE tasks ADD COLUMN estimated_minutes INTEGER")?;
+    ensure_column(&conn, "ALTER TABLE tasks ADD COLUMN act_started_at TEXT")?;
+    ensure_column(&conn, "ALTER TABLE tasks ADD COLUMN act_due_at TEXT")?;
+    ensure_column(
+        &conn,
+        "ALTER TABLE tasks ADD COLUMN progress_note TEXT NOT NULL DEFAULT ''",
+    )?;
     Ok(conn)
+}
+
+fn ensure_column(conn: &Connection, sql: &str) -> Result<(), String> {
+    match conn.execute(sql, []) {
+        Ok(_) => Ok(()),
+        Err(error) => {
+            let message = error.to_string();
+            if message.contains("duplicate column name") {
+                Ok(())
+            } else {
+                Err(message)
+            }
+        }
+    }
 }
 
 fn main() {

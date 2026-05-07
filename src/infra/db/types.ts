@@ -3,7 +3,16 @@ import type { Task } from "../../domain/tasks/types";
 export type TaskEvent = {
   id: string;
   taskId: string;
-  eventType: "created" | "decomposed" | "recommended" | "started" | "completed" | "skipped" | "snoozed";
+  eventType:
+    | "created"
+    | "oriented"
+    | "reoriented"
+    | "decided"
+    | "act_started"
+    | "act_timed_out"
+    | "completed"
+    | "decomposed"
+    | "archived";
   payloadJson: string;
   createdAt: string;
 };

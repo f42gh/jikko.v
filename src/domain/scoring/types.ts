@@ -1,13 +1,8 @@
 import type { Task } from "../tasks/types";
 
 export type ScoreWeights = {
-  urgency: number;
-  impact: number;
-  penaltyOfDelay: number;
-  momentumGain: number;
-  effortEstimate: number;
-  emotionalResistance: number;
-  energyRequired: number;
+  roi: number;
+  effortPenalty: number;
 };
 
 export type Recommendation = {
@@ -15,5 +10,8 @@ export type Recommendation = {
   priorityScore: number;
   expectedRoi: number;
   whyNowSummary: string;
-  breakdown: Record<string, number>;
+  breakdown: {
+    roi: number;
+    effortPenalty: number;
+  };
 };

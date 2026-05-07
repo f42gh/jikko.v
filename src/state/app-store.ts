@@ -3,9 +3,9 @@ import { create } from "zustand";
 export type ScreenId = "now" | "inbox" | "plan" | "history" | "settings";
 
 export const screenLabels: Record<ScreenId, string> = {
-  now: "今",
-  inbox: "入力",
-  plan: "計画",
+  now: "Act",
+  inbox: "Observe",
+  plan: "Orient",
   history: "履歴",
   settings: "設定",
 };
