@@ -2,8 +2,10 @@
 
 use rusqlite::{params_from_iter, types::ValueRef, Connection};
 use serde_json::Value;
+use std::io::Write;
 use std::fs;
 use std::path::PathBuf;
+use std::process::{Command, Stdio};
 use tauri::{Manager, State};
 
 struct DbPath {
@@ -53,6 +55,15 @@ fn select_sql(
 
     let collected: Result<Vec<_>, _> = rows.collect();
     collected.map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+fn run_analysis_helper(app: tauri::AppHandle, payload: Value) -> Result<Value, String> {
+    let script_path = resolve_analysis_script(&app)?;
+    let payload_json = payload.to_string();
+
+    let output = run_python_script(&script_path, &payload_json)?;
+    serde_json::from_slice::<Value>(&output.stdout).map_err(|error| error.to_string())
 }
 
 fn convert_params(params: &[Value]) -> Vec<rusqlite::types::Value> {
@@ -173,6 +184,70 @@ fn open_connection(path: &PathBuf) -> Result<Connection, String> {
     Ok(conn)
 }
 
+fn resolve_analysis_script(app: &tauri::AppHandle) -> Result<PathBuf, String> {
+    let dev_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("resources")
+        .join("analysis_helper.py");
+    if dev_path.exists() {
+        return Ok(dev_path);
+    }
+
+    let resource_dir = app
+        .path()
+        .resource_dir()
+        .map_err(|error| error.to_string())?;
+    let bundled_path = resource_dir.join("analysis_helper.py");
+    if bundled_path.exists() {
+        return Ok(bundled_path);
+    }
+
+    Err("analysis helper script not found".to_string())
+}
+
+fn run_python_script(script_path: &PathBuf, payload_json: &str) -> Result<std::process::Output, String> {
+    let python_candidates = ["python3", "python"];
+
+    let mut last_error = "python executable not found".to_string();
+    for candidate in python_candidates {
+        match spawn_python(candidate, script_path, payload_json) {
+            Ok(output) => {
+                if output.status.success() {
+                    return Ok(output);
+                }
+
+                return Err(String::from_utf8_lossy(&output.stderr).trim().to_string());
+            }
+            Err(error) => {
+                last_error = error;
+            }
+        }
+    }
+
+    Err(last_error)
+}
+
+fn spawn_python(
+    executable: &str,
+    script_path: &PathBuf,
+    payload_json: &str,
+) -> Result<std::process::Output, String> {
+    let mut child = Command::new(executable)
+        .arg(script_path)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .map_err(|error| error.to_string())?;
+
+    if let Some(stdin) = child.stdin.as_mut() {
+        stdin
+            .write_all(payload_json.as_bytes())
+            .map_err(|error| error.to_string())?;
+    }
+
+    child.wait_with_output().map_err(|error| error.to_string())
+}
+
 fn ensure_column(conn: &Connection, sql: &str) -> Result<(), String> {
     match conn.execute(sql, []) {
         Ok(_) => Ok(()),
@@ -198,7 +273,7 @@ fn main() {
             app.manage(DbPath { path: db_path });
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![execute_sql, select_sql])
+        .invoke_handler(tauri::generate_handler![execute_sql, select_sql, run_analysis_helper])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

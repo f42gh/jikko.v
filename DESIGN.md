@@ -42,6 +42,7 @@ Recommended stack:
 - E2E testing: `Playwright`
 - Priority engine: deterministic rule-based logic implemented in TypeScript
 - AI: optional in v1, never used for authoritative prioritization
+- Optional analysis helper: Python subprocess invoked from Tauri on refresh
 
 ## Why This Conclusion
 
@@ -124,10 +125,27 @@ Proposed structure:
   - completion history, streaks, reflection inputs
 - `domain/planning`
   - daily recommendation, next-action selection, reevaluation
+- `domain/analysis`
+  - estimation gap diagnostics, helper-process handoff, analysis suggestions
 - `infra/db`
   - SQLite, migrations, repositories
 - `infra/system`
-  - Tauri integration, notifications, file import/export
+  - Tauri integration, notifications, file import/export, helper-process invocation
+
+## Analysis Helper Process
+
+The analysis layer can become more compute-heavy than the core scoring loop.
+
+To keep v1 light without blocking future experimentation, jikko may invoke an optional `Python` helper process from `Tauri` only when analysis is refreshed.
+
+Rules:
+
+- core prioritization remains deterministic in TypeScript
+- Python is limited to secondary analysis, diagnostics, and future scheduling experiments
+- the helper process is request/response, not a permanent realtime backend
+- if the helper is unavailable, the TypeScript analysis path remains the fallback
+
+This preserves the local-first simplicity while leaving room for `pandas`, `numpy`, and future ROI or scheduling experiments.
 
 ## Screen Design Basics
 

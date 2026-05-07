@@ -17,6 +17,9 @@ import { StatCard } from "../components/StatCard";
 export function AnalysisScreen() {
   const analysisMetrics = useTaskStore((state) => state.analysisMetrics);
   const analysisSuggestions = useTaskStore((state) => state.analysisSuggestions);
+  const analysisSource = useTaskStore((state) => state.analysisSource);
+  const analysisSyncState = useTaskStore((state) => state.analysisSyncState);
+  const refreshAnalysis = useTaskStore((state) => state.refreshAnalysis);
   const weights = useTaskStore((state) => state.weights);
   const { summary, roiSeries, effortSeries, flowSeries } = analysisMetrics;
 
@@ -30,10 +33,20 @@ export function AnalysisScreen() {
           </p>
         </div>
         <div className="rounded-3xl border border-accent/20 bg-accent/8 px-5 py-4 text-right">
-          <p className="text-xs tracking-[0.18em] text-white/38">現在の重み</p>
+          <p className="text-xs tracking-[0.18em] text-white/38">現在の重み / 分析元</p>
           <p className="mt-2 text-sm text-ink">
             ROI {weights.roi.toFixed(1)} / Cost {weights.effortPenalty.toFixed(1)}
           </p>
+          <p className="mt-1 text-xs text-white/50">
+            {analysisSource === "python" ? "Python helper" : "TypeScript fallback"}
+          </p>
+          <button
+            className="mt-3 rounded-full border border-white/15 px-4 py-2 text-xs font-semibold text-ink transition hover:border-accent/45 hover:bg-accent/10"
+            onClick={() => void refreshAnalysis()}
+            type="button"
+          >
+            {analysisSyncState === "syncing" ? "再分析中" : "再分析"}
+          </button>
         </div>
       </div>
 

@@ -10,6 +10,8 @@ import type { CreateTaskInput, OrientTaskInput, Task, TimeoutActInput } from "..
 import { selectNextTask } from "../domain/planning/select-next";
 import { tasksRepository } from "../infra/db/repositories/tasks-repository";
 import type { TaskEvent } from "../infra/db/types";
+import { runAnalysisHelper } from "../infra/system/analysis-helper";
+import { isTauriRuntime } from "../infra/system/tauri";
 
 type AnalysisMetrics = ReturnType<typeof buildAnalysisMetrics>;
 
@@ -22,6 +24,8 @@ type TaskState = {
   recommendation: Recommendation | null;
   analysisMetrics: AnalysisMetrics;
   analysisSuggestions: AnalysisSuggestion[];
+  analysisSource: "typescript" | "python";
+  analysisSyncState: "idle" | "syncing" | "error";
   initialize: () => Promise<void>;
   addObservedTask: (input: CreateTaskInput) => Promise<void>;
   orientTask: (taskId: string, input: OrientTaskInput) => Promise<void>;
@@ -31,6 +35,7 @@ type TaskState = {
   completeAct: (taskId: string) => Promise<void>;
   decomposeTask: (taskId: string, input: CreateTaskInput) => Promise<void>;
   updateWeight: (key: keyof ScoreWeights, value: number) => void;
+  refreshAnalysis: () => Promise<void>;
 };
 
 const emptyAnalysisMetrics = buildAnalysisMetrics([], [], []);
@@ -44,6 +49,8 @@ export const useTaskStore = create<TaskState>((set, get) => ({
   recommendation: null,
   analysisMetrics: emptyAnalysisMetrics,
   analysisSuggestions: buildAnalysisSuggestions(emptyAnalysisMetrics, defaultScoreWeights),
+  analysisSource: "typescript",
+  analysisSyncState: "idle",
   initialize: async () => {
     const seedData = await tasksRepository.load();
     const reconciled = await reconcileExpiredActs(seedData.tasks, seedData.events);
@@ -53,6 +60,7 @@ export const useTaskStore = create<TaskState>((set, get) => ({
       events: reconciled.events,
       ...deriveTaskState(reconciled.tasks, reconciled.events, defaultScoreWeights),
     });
+    void syncAnalysisWithHelper(set, get, reconciled.tasks, reconciled.events, defaultScoreWeights);
   },
   addObservedTask: async (input) => {
     const task = createObservedTask(input);
@@ -158,6 +166,10 @@ export const useTaskStore = create<TaskState>((set, get) => ({
       weights,
       ...deriveTaskState(get().tasks, get().events, weights),
     });
+    void syncAnalysisWithHelper(set, get, get().tasks, get().events, weights);
+  },
+  refreshAnalysis: async () => {
+    await syncAnalysisWithHelper(set, get, get().tasks, get().events, get().weights);
   },
 }));
 
@@ -172,6 +184,7 @@ function recompute(
     events,
     ...deriveTaskState(tasks, events, get().weights),
   });
+  void syncAnalysisWithHelper(set, get, tasks, events, get().weights);
 }
 
 function computeRecommendation(tasks: Task[], rankedTasks: Recommendation[], weights: ScoreWeights) {
@@ -192,7 +205,66 @@ export function deriveTaskState(tasks: Task[], events: TaskEvent[], weights: Sco
     recommendation: computeRecommendation(tasks, rankedTasks, weights),
     analysisMetrics,
     analysisSuggestions: buildAnalysisSuggestions(analysisMetrics, weights),
+    analysisSource: "typescript" as const,
   };
+}
+
+async function syncAnalysisWithHelper(
+  set: (partial: Partial<TaskState>) => void,
+  get: () => TaskState,
+  tasks: Task[],
+  events: TaskEvent[],
+  weights: ScoreWeights,
+) {
+  if (!isTauriRuntime()) {
+    return;
+  }
+
+  const signature = buildAnalysisSignature(tasks, events, weights);
+  set({ analysisSyncState: "syncing" });
+
+  try {
+    const rankedTasks = rankTasks(tasks, weights);
+    const result = await runAnalysisHelper({
+      tasks,
+      events,
+      weights,
+      rankedTasks,
+    });
+
+    if (!result) {
+      set({ analysisSyncState: "idle" });
+      return;
+    }
+
+    if (signature !== buildAnalysisSignature(get().tasks, get().events, get().weights)) {
+      return;
+    }
+
+    set({
+      analysisMetrics: result.analysisMetrics,
+      analysisSuggestions: result.analysisSuggestions,
+      analysisSource: "python",
+      analysisSyncState: "idle",
+    });
+  } catch {
+    if (signature !== buildAnalysisSignature(get().tasks, get().events, get().weights)) {
+      return;
+    }
+
+    set({
+      analysisSource: "typescript",
+      analysisSyncState: "error",
+    });
+  }
+}
+
+function buildAnalysisSignature(tasks: Task[], events: TaskEvent[], weights: ScoreWeights) {
+  return JSON.stringify({
+    weights,
+    tasks: tasks.map((task) => [task.id, task.updatedAt, task.status]),
+    events: events.map((event) => [event.id, event.createdAt, event.eventType]),
+  });
 }
 
 function createEvent(
