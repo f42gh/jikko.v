@@ -15,13 +15,11 @@
 | E2E テスト | Playwright |
 | 補助分析プロセス | Python（Tauri 経由の単発実行） |
 
-> package.json に React 依存が残っているが、現在のビルドターゲットは Svelte のみ。React 関連依存は整理予定。
-
 ## 採用理由
 
 **Tauri** — ローカルアプリとしての配布・SQLite 連携・OS 連携に最適。認証不要・ローカルファースト前提に整合する。将来の通知・バックアップ・ファイル操作への拡張もしやすい。
 
-**Svelte** — 実装量が少なく、状態の流れが直接的。`今この 1 件` に集中する画面構造との相性が良い。React からの移行は、task-store 一極集中の解消と UI 実装量の削減を主目的として実施した。
+**Svelte** — 実装量が少なく、状態の流れが直接的。`今この 1 件` に集中する画面構造との相性が良い。task-store 一極集中を避けつつ、UI と状態遷移を近い距離で保てる点を重視して採用した。
 
 **SQLite + Drizzle** — 単独利用・ローカル保存に最適。抽象化が過剰にならず、スキーマと SQL の見通しを保ちやすい。
 
@@ -41,7 +39,7 @@ src/
 ├── infra/
 │   ├── db/               # SQLite スキーマ・Repository・マイグレーション
 │   └── system/           # Tauri 連携・補助プロセス呼び出し
-└── state/                # React 版の残骸。移行完了後に削除予定
+└── vite-env.d.ts         # Vite 環境型
 ```
 
 `domain/` と `infra/` は UI フレームワークに依存しない純粋な TypeScript 層。UI が変わっても再利用できる。
@@ -107,7 +105,7 @@ expectedRoi   = roi / max(effortPenalty, 0.5)
 
 ## テスト
 
-- **Vitest** — ドメインロジック（scoring / tasks / history / analysis）の自動検証
+- **Vitest** — ドメインロジック（scoring / history / analysis）の自動検証
 - **Playwright** — 中核ループの UI 動作検証（タスク追加・着手・完了・履歴反映）
 
 ## 対象外（v1）

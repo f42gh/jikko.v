@@ -149,7 +149,7 @@ DB スキーマを変える場合は、`domain/tasks/types.ts` と `proto-state.
 ### テストを変えたいとき
 
 - `src/domain/scoring/engine.test.ts` — スコアリングロジックの期待値
-- `src/state/task-store.test.ts` — 状態遷移の検証（React 版の残骸、移行後は削除予定）
+- `src/domain/analysis/metrics.test.ts` — 見積もり差分と補正候補の期待値
 - `tests/e2e/app.spec.ts` — 中核ループの UI 動作検証
 - `vite.config.ts` — Vitest の対象・実行条件
 - `playwright.config.ts` — E2E の実行条件
