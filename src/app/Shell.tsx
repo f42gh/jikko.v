@@ -1,3 +1,4 @@
+import { AnalysisScreen } from "./screens/AnalysisScreen";
 import { Header } from "./components/Header";
 import { HistoryScreen } from "./screens/HistoryScreen";
 import { InboxScreen } from "./screens/InboxScreen";
@@ -44,6 +45,8 @@ function renderScreen(screen: ScreenId) {
       return <InboxScreen />;
     case "plan":
       return <PlanScreen />;
+    case "analysis":
+      return <AnalysisScreen />;
     case "history":
       return <HistoryScreen />;
     case "settings":

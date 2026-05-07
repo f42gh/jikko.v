@@ -5,7 +5,9 @@ import {
   applyOrientTask,
   applyStartActTask,
   applyTimeoutActTask,
+  deriveTaskState,
 } from "./task-store";
+import { defaultScoreWeights } from "../domain/scoring/defaults";
 
 describe("task-store transitions", () => {
   it("creates an observe task from the minimal input", () => {
@@ -63,5 +65,34 @@ describe("task-store transitions", () => {
     const completed = applyCompleteActTask(active);
 
     expect(completed.status).toBe("done");
+  });
+
+  it("recomputes analysis metrics and suggestions from tasks and events", () => {
+    const observed = createObservedTask({ title: "T", observeMemo: "" });
+    const oriented = applyOrientTask(observed, {
+      roiScore: 4,
+      estimatedMinutes: 20,
+      orientMemo: "",
+    });
+    const active = applyStartActTask(oriented);
+    const completed = applyCompleteActTask(active);
+
+    const derived = deriveTaskState(
+      [completed],
+      [
+        {
+          id: "event-completed",
+          taskId: completed.id,
+          eventType: "completed",
+          payloadJson: "{\"actualMinutes\":26}",
+          createdAt: "2026-05-07T09:30:00.000Z",
+        },
+      ],
+      defaultScoreWeights,
+    );
+
+    expect(derived.analysisMetrics.summary.completedCount).toBe(1);
+    expect(derived.analysisMetrics.effortSeries.some((point) => point.actual > 0)).toBe(true);
+    expect(derived.analysisSuggestions.length).toBeGreaterThan(0);
   });
 });

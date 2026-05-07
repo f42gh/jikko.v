@@ -4,6 +4,7 @@ const items: Array<{ id: ScreenId; label: string }> = [
   { id: "now", label: "Act" },
   { id: "inbox", label: "Observe" },
   { id: "plan", label: "Orient" },
+  { id: "analysis", label: "分析" },
   { id: "history", label: "履歴" },
 ];
 

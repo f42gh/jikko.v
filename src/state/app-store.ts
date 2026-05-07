@@ -1,11 +1,12 @@
 import { create } from "zustand";
 
-export type ScreenId = "now" | "inbox" | "plan" | "history" | "settings";
+export type ScreenId = "now" | "inbox" | "plan" | "analysis" | "history" | "settings";
 
 export const screenLabels: Record<ScreenId, string> = {
   now: "Act",
   inbox: "Observe",
   plan: "Orient",
+  analysis: "分析",
   history: "履歴",
   settings: "設定",
 };

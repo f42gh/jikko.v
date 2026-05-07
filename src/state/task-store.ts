@@ -1,15 +1,17 @@
 import { create } from "zustand";
-import { createObservedTask } from "../domain/tasks/factory";
-import type { CreateTaskInput, OrientTaskInput, Task, TimeoutActInput } from "../domain/tasks/types";
+import { buildAnalysisMetrics } from "../domain/analysis/metrics";
+import { buildAnalysisSuggestions } from "../domain/analysis/suggestions";
+import type { AnalysisSuggestion } from "../domain/analysis/types";
 import { defaultScoreWeights } from "../domain/scoring/defaults";
 import { rankTasks, scoreTask } from "../domain/scoring/engine";
 import type { Recommendation, ScoreWeights } from "../domain/scoring/types";
+import { createObservedTask } from "../domain/tasks/factory";
+import type { CreateTaskInput, OrientTaskInput, Task, TimeoutActInput } from "../domain/tasks/types";
 import { selectNextTask } from "../domain/planning/select-next";
-import { buildHistoryMetrics } from "../domain/history/metrics";
-import type { TaskEvent } from "../infra/db/types";
 import { tasksRepository } from "../infra/db/repositories/tasks-repository";
+import type { TaskEvent } from "../infra/db/types";
 
-type HistoryMetrics = ReturnType<typeof buildHistoryMetrics>;
+type AnalysisMetrics = ReturnType<typeof buildAnalysisMetrics>;
 
 type TaskState = {
   isReady: boolean;
@@ -18,7 +20,8 @@ type TaskState = {
   weights: ScoreWeights;
   rankedTasks: Recommendation[];
   recommendation: Recommendation | null;
-  historyMetrics: HistoryMetrics;
+  analysisMetrics: AnalysisMetrics;
+  analysisSuggestions: AnalysisSuggestion[];
   initialize: () => Promise<void>;
   addObservedTask: (input: CreateTaskInput) => Promise<void>;
   orientTask: (taskId: string, input: OrientTaskInput) => Promise<void>;
@@ -30,7 +33,7 @@ type TaskState = {
   updateWeight: (key: keyof ScoreWeights, value: number) => void;
 };
 
-const emptyHistoryMetrics = buildHistoryMetrics([], [], []);
+const emptyAnalysisMetrics = buildAnalysisMetrics([], [], []);
 
 export const useTaskStore = create<TaskState>((set, get) => ({
   isReady: false,
@@ -39,18 +42,16 @@ export const useTaskStore = create<TaskState>((set, get) => ({
   weights: defaultScoreWeights,
   rankedTasks: [],
   recommendation: null,
-  historyMetrics: emptyHistoryMetrics,
+  analysisMetrics: emptyAnalysisMetrics,
+  analysisSuggestions: buildAnalysisSuggestions(emptyAnalysisMetrics, defaultScoreWeights),
   initialize: async () => {
     const seedData = await tasksRepository.load();
     const reconciled = await reconcileExpiredActs(seedData.tasks, seedData.events);
-    const rankedTasks = rankTasks(reconciled.tasks, defaultScoreWeights);
     set({
       isReady: true,
       tasks: reconciled.tasks,
       events: reconciled.events,
-      rankedTasks,
-      recommendation: computeRecommendation(reconciled.tasks, rankedTasks, defaultScoreWeights),
-      historyMetrics: buildHistoryMetrics(reconciled.events, rankedTasks, reconciled.tasks),
+      ...deriveTaskState(reconciled.tasks, reconciled.events, defaultScoreWeights),
     });
   },
   addObservedTask: async (input) => {
@@ -123,7 +124,11 @@ export const useTaskStore = create<TaskState>((set, get) => ({
     }
 
     const updatedTask = applyCompleteActTask(currentTask);
-    const event = createEvent(taskId, "completed");
+    const event = createEvent(taskId, "completed", {
+      actualMinutes: calculateActualMinutes(currentTask.actStartedAt),
+      estimatedMinutes: currentTask.estimatedMinutes,
+      roiScore: currentTask.roiScore,
+    });
     await tasksRepository.updateTask(updatedTask, event);
     const nextTasks = get().tasks.map((task) => (task.id === taskId ? updatedTask : task));
     recompute(set, get, nextTasks, [...get().events, event]);
@@ -148,12 +153,10 @@ export const useTaskStore = create<TaskState>((set, get) => ({
       ...get().weights,
       [key]: value,
     };
-    const rankedTasks = rankTasks(get().tasks, weights);
+
     set({
       weights,
-      rankedTasks,
-      recommendation: computeRecommendation(get().tasks, rankedTasks, weights),
-      historyMetrics: buildHistoryMetrics(get().events, rankedTasks, get().tasks),
+      ...deriveTaskState(get().tasks, get().events, weights),
     });
   },
 }));
@@ -164,13 +167,10 @@ function recompute(
   tasks: Task[],
   events: TaskEvent[],
 ) {
-  const rankedTasks = rankTasks(tasks, get().weights);
   set({
     tasks,
     events,
-    rankedTasks,
-    recommendation: computeRecommendation(tasks, rankedTasks, get().weights),
-    historyMetrics: buildHistoryMetrics(events, rankedTasks, tasks),
+    ...deriveTaskState(tasks, events, get().weights),
   });
 }
 
@@ -183,7 +183,23 @@ function computeRecommendation(tasks: Task[], rankedTasks: Recommendation[], wei
   return selectNextTask(rankedTasks);
 }
 
-function createEvent(taskId: string, eventType: TaskEvent["eventType"], payload: Record<string, unknown> = {}): TaskEvent {
+export function deriveTaskState(tasks: Task[], events: TaskEvent[], weights: ScoreWeights) {
+  const rankedTasks = rankTasks(tasks, weights);
+  const analysisMetrics = buildAnalysisMetrics(events, rankedTasks, tasks);
+
+  return {
+    rankedTasks,
+    recommendation: computeRecommendation(tasks, rankedTasks, weights),
+    analysisMetrics,
+    analysisSuggestions: buildAnalysisSuggestions(analysisMetrics, weights),
+  };
+}
+
+function createEvent(
+  taskId: string,
+  eventType: TaskEvent["eventType"],
+  payload: Record<string, unknown> = {},
+): TaskEvent {
   return {
     id: crypto.randomUUID(),
     taskId,
@@ -228,6 +244,14 @@ function ensureNotAct(task: Task): Task {
     actDueAt: null,
     updatedAt: new Date().toISOString(),
   };
+}
+
+function calculateActualMinutes(actStartedAt: string | null) {
+  if (!actStartedAt) {
+    return null;
+  }
+
+  return Math.max(1, Math.round((Date.now() - new Date(actStartedAt).getTime()) / 60000));
 }
 
 export function applyOrientTask(task: Task, input: OrientTaskInput): Task {
