@@ -1,4 +1,5 @@
 import { desc, eq } from "drizzle-orm";
+import { invoke } from "@tauri-apps/api/core";
 import { db } from "../client";
 import { tasks, taskEvents } from "../schema";
 import { isTauriRuntime } from "../../system/tauri";
@@ -7,6 +8,9 @@ import type { SeedData, TaskEvent } from "../types";
 import { seedDemoData } from "../seed";
 
 const LOCAL_STORAGE_KEY = "jikko.local.seed-data.v3";
+
+type RawTaskRow = Record<string, unknown>;
+type RawTaskEventRow = Record<string, unknown>;
 
 export const tasksRepository = {
   async load() {
@@ -53,13 +57,19 @@ export const tasksRepository = {
 };
 
 async function loadFromTauri(): Promise<SeedData> {
-  const storedTasks = await db.select().from(tasks).orderBy(desc(tasks.createdAt));
-  const storedEvents = await db.select().from(taskEvents).orderBy(desc(taskEvents.createdAt));
+  const storedTasks = await invoke<RawTaskRow[]>("select_sql", {
+    sql: "SELECT * FROM tasks ORDER BY created_at DESC",
+    params: [],
+  });
+  const storedEvents = await invoke<RawTaskEventRow[]>("select_sql", {
+    sql: "SELECT * FROM task_events ORDER BY created_at DESC",
+    params: [],
+  });
 
   if (storedTasks.length > 0) {
     return {
-      tasks: [...storedTasks].reverse().map(parseTask),
-      events: [...storedEvents].reverse().map(parseTaskEvent),
+      tasks: [...storedTasks].reverse().map(parseTaskRow),
+      events: [...storedEvents].reverse().map(parseTaskEventRow),
     };
   }
 
@@ -130,6 +140,24 @@ function mapTaskRecord(task: Task) {
   };
 }
 
+function parseTaskRow(row: RawTaskRow): Task {
+  return taskSchema.parse({
+    id: readString(row, "id"),
+    title: readString(row, "title"),
+    status: normalizeTaskStatus(readString(row, "status")),
+    parentTaskId: readNullableString(row, "parent_task_id", "parentTaskId"),
+    observeMemo: readNullableString(row, "observe_memo", "observeMemo", "description") ?? "",
+    orientMemo: readNullableString(row, "orient_memo", "orientMemo") ?? "",
+    roiScore: readNullableNumber(row, "gain_score", "gainScore", "impact"),
+    estimatedMinutes: readNullableNumber(row, "estimated_minutes", "estimatedMinutes"),
+    actStartedAt: readNullableString(row, "act_started_at", "actStartedAt"),
+    actDueAt: readNullableString(row, "act_due_at", "actDueAt"),
+    progressNote: readNullableString(row, "progress_note", "progressNote") ?? "",
+    createdAt: readString(row, "created_at", "createdAt"),
+    updatedAt: readString(row, "updated_at", "updatedAt"),
+  });
+}
+
 function parseTask(task: typeof tasks.$inferSelect): Task {
   return taskSchema.parse({
     id: task.id,
@@ -146,6 +174,16 @@ function parseTask(task: typeof tasks.$inferSelect): Task {
     createdAt: task.createdAt,
     updatedAt: task.updatedAt,
   });
+}
+
+function parseTaskEventRow(row: RawTaskEventRow): TaskEvent {
+  return {
+    id: readString(row, "id"),
+    taskId: readString(row, "task_id", "taskId"),
+    eventType: readString(row, "event_type", "eventType") as TaskEvent["eventType"],
+    payloadJson: readString(row, "payload_json", "payloadJson"),
+    createdAt: readString(row, "created_at", "createdAt"),
+  };
 }
 
 function parseTaskEvent(event: typeof taskEvents.$inferSelect): TaskEvent {
@@ -184,4 +222,71 @@ function normalizeEnergyRequired(estimatedMinutes: number | null) {
   }
 
   return Math.min(5, Math.max(1, Math.ceil(estimatedMinutes / 45)));
+}
+
+function readValue(row: Record<string, unknown>, ...keys: string[]) {
+  for (const key of keys) {
+    if (key in row) {
+      return row[key];
+    }
+  }
+
+  return undefined;
+}
+
+function readString(row: Record<string, unknown>, ...keys: string[]) {
+  const value = readValue(row, ...keys);
+  if (typeof value === "string") {
+    return value;
+  }
+
+  if (value === null || value === undefined) {
+    throw new Error(`Missing string field: ${keys.join(" | ")}`);
+  }
+
+  return String(value);
+}
+
+function readNullableString(row: Record<string, unknown>, ...keys: string[]) {
+  const value = readValue(row, ...keys);
+  if (value === null || value === undefined) {
+    return null;
+  }
+
+  return typeof value === "string" ? value : String(value);
+}
+
+function readNullableNumber(row: Record<string, unknown>, ...keys: string[]) {
+  const value = readValue(row, ...keys);
+  if (value === null || value === undefined || value === "") {
+    return null;
+  }
+
+  if (typeof value === "number") {
+    return Number.isFinite(value) ? value : null;
+  }
+
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function normalizeTaskStatus(status: string): Task["status"] {
+  switch (status) {
+    case "observe":
+    case "orient":
+    case "act":
+    case "done":
+    case "archived":
+      return status;
+    case "pending":
+      return "observe";
+    case "active":
+    case "doing":
+    case "in_progress":
+      return "act";
+    case "completed":
+      return "done";
+    default:
+      return "observe";
+  }
 }

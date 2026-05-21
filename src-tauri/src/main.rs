@@ -2,8 +2,8 @@
 
 use rusqlite::{params_from_iter, types::ValueRef, Connection};
 use serde_json::Value;
-use std::io::Write;
 use std::fs;
+use std::io::Write;
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
 use tauri::{Manager, State};
@@ -14,7 +14,7 @@ struct DbPath {
 
 #[tauri::command]
 fn execute_sql(state: State<DbPath>, sql: String, params: Vec<Value>) -> Result<(), String> {
-    let conn = open_connection(&state.path)?;
+    let conn = Connection::open(&state.path).map_err(|error| error.to_string())?;
     let converted = convert_params(&params);
     conn.execute(&sql, params_from_iter(converted.iter()))
         .map_err(|error| error.to_string())?;
@@ -27,7 +27,7 @@ fn select_sql(
     sql: String,
     params: Vec<Value>,
 ) -> Result<Vec<std::collections::HashMap<String, Value>>, String> {
-    let conn = open_connection(&state.path)?;
+    let conn = Connection::open(&state.path).map_err(|error| error.to_string())?;
     let converted = convert_params(&params);
     let mut stmt = conn.prepare(&sql).map_err(|error| error.to_string())?;
     let column_names: Vec<String> = stmt
@@ -92,6 +92,11 @@ fn open_connection(path: &PathBuf) -> Result<Connection, String> {
         fs::create_dir_all(parent).map_err(|error| error.to_string())?;
     }
     let conn = Connection::open(path).map_err(|error| error.to_string())?;
+    initialize_schema(&conn)?;
+    Ok(conn)
+}
+
+fn initialize_schema(conn: &Connection) -> Result<(), String> {
     conn.execute_batch(
         "
         CREATE TABLE IF NOT EXISTS tasks (
@@ -163,25 +168,63 @@ fn open_connection(path: &PathBuf) -> Result<Connection, String> {
         ",
     )
     .map_err(|error| error.to_string())?;
+
+    let existing_columns = task_columns(conn)?;
     ensure_column(
-        &conn,
+        conn,
+        &existing_columns,
+        "observe_memo",
         "ALTER TABLE tasks ADD COLUMN observe_memo TEXT NOT NULL DEFAULT ''",
     )?;
     ensure_column(
-        &conn,
+        conn,
+        &existing_columns,
+        "orient_memo",
         "ALTER TABLE tasks ADD COLUMN orient_memo TEXT NOT NULL DEFAULT ''",
     )?;
-    ensure_column(&conn, "ALTER TABLE tasks ADD COLUMN pain_score INTEGER")?;
-    ensure_column(&conn, "ALTER TABLE tasks ADD COLUMN gain_score INTEGER")?;
-    ensure_column(&conn, "ALTER TABLE tasks ADD COLUMN deadline_at TEXT")?;
-    ensure_column(&conn, "ALTER TABLE tasks ADD COLUMN estimated_minutes INTEGER")?;
-    ensure_column(&conn, "ALTER TABLE tasks ADD COLUMN act_started_at TEXT")?;
-    ensure_column(&conn, "ALTER TABLE tasks ADD COLUMN act_due_at TEXT")?;
     ensure_column(
-        &conn,
+        conn,
+        &existing_columns,
+        "pain_score",
+        "ALTER TABLE tasks ADD COLUMN pain_score INTEGER",
+    )?;
+    ensure_column(
+        conn,
+        &existing_columns,
+        "gain_score",
+        "ALTER TABLE tasks ADD COLUMN gain_score INTEGER",
+    )?;
+    ensure_column(
+        conn,
+        &existing_columns,
+        "deadline_at",
+        "ALTER TABLE tasks ADD COLUMN deadline_at TEXT",
+    )?;
+    ensure_column(
+        conn,
+        &existing_columns,
+        "estimated_minutes",
+        "ALTER TABLE tasks ADD COLUMN estimated_minutes INTEGER",
+    )?;
+    ensure_column(
+        conn,
+        &existing_columns,
+        "act_started_at",
+        "ALTER TABLE tasks ADD COLUMN act_started_at TEXT",
+    )?;
+    ensure_column(
+        conn,
+        &existing_columns,
+        "act_due_at",
+        "ALTER TABLE tasks ADD COLUMN act_due_at TEXT",
+    )?;
+    ensure_column(
+        conn,
+        &existing_columns,
+        "progress_note",
         "ALTER TABLE tasks ADD COLUMN progress_note TEXT NOT NULL DEFAULT ''",
     )?;
-    Ok(conn)
+    Ok(())
 }
 
 fn resolve_analysis_script(app: &tauri::AppHandle) -> Result<PathBuf, String> {
@@ -248,18 +291,29 @@ fn spawn_python(
     child.wait_with_output().map_err(|error| error.to_string())
 }
 
-fn ensure_column(conn: &Connection, sql: &str) -> Result<(), String> {
-    match conn.execute(sql, []) {
-        Ok(_) => Ok(()),
-        Err(error) => {
-            let message = error.to_string();
-            if message.contains("duplicate column name") {
-                Ok(())
-            } else {
-                Err(message)
-            }
-        }
+fn task_columns(conn: &Connection) -> Result<Vec<String>, String> {
+    let mut stmt = conn
+        .prepare("PRAGMA table_info(tasks)")
+        .map_err(|error| error.to_string())?;
+    let columns = stmt
+        .query_map([], |row| row.get::<_, String>(1))
+        .map_err(|error| error.to_string())?;
+    let collected: Result<Vec<_>, _> = columns.collect();
+    collected.map_err(|error| error.to_string())
+}
+
+fn ensure_column(
+    conn: &Connection,
+    existing_columns: &[String],
+    column_name: &str,
+    sql: &str,
+) -> Result<(), String> {
+    if existing_columns.iter().any(|name| name == column_name) {
+        return Ok(());
     }
+
+    conn.execute(sql, []).map_err(|error| error.to_string())?;
+    Ok(())
 }
 
 fn main() {
@@ -270,6 +324,8 @@ fn main() {
                 .app_data_dir()
                 .map_err(|error| std::io::Error::new(std::io::ErrorKind::Other, error.to_string()))?;
             let db_path = data_dir.join("local-data.sqlite");
+            open_connection(&db_path)
+                .map_err(|error| std::io::Error::new(std::io::ErrorKind::Other, error))?;
             app.manage(DbPath { path: db_path });
             Ok(())
         })

@@ -4,6 +4,7 @@
     activeTask,
     addTask,
     appState,
+    bootState,
     completeTask,
     initializeApp,
     observeTasks,
@@ -140,6 +141,19 @@
     }
     return "low";
   }
+
+  function bootTimeLabel(at: string) {
+    const date = new Date(at);
+    return Number.isNaN(date.getTime()) ? "--:--:--" : date.toLocaleTimeString("ja-JP");
+  }
+
+  async function copyBootError() {
+    if (!$bootState.error || typeof navigator === "undefined" || !navigator.clipboard) {
+      return;
+    }
+
+    await navigator.clipboard.writeText($bootState.error);
+  }
 </script>
 
 <svelte:head>
@@ -147,7 +161,49 @@
 </svelte:head>
 
 {#if !$appState.ready}
-  <main class="stage loading">起動中</main>
+  <main class="stage loading">
+    <section class="boot-panel">
+      <div class="boot-head">
+        <div>
+          <p class="boot-kicker">startup</p>
+          <h1>{$bootState.message}</h1>
+        </div>
+        <span class:error={$bootState.phase === "error"} class="boot-phase">{$bootState.phase}</span>
+      </div>
+
+      <div class="boot-progress">
+        <div class="boot-progress-fill" style={`width: ${$bootState.progress}%`}></div>
+      </div>
+
+      <div class="boot-meta">
+        <span>{$bootState.progress}%</span>
+        {#if $bootState.error}
+          <div class="boot-error">
+            <strong>{$bootState.error}</strong>
+            <button class="minor boot-copy" on:click={() => void copyBootError()} type="button">コピー</button>
+          </div>
+        {/if}
+      </div>
+
+      <div class="boot-log">
+        {#each [...$bootState.logs].reverse() as entry (entry.id)}
+          <div class="boot-log-entry">
+            <span>{bootTimeLabel(entry.at)}</span>
+            <strong>{entry.label}</strong>
+            {#if entry.detail}
+              <p>{entry.detail}</p>
+            {/if}
+          </div>
+        {/each}
+      </div>
+
+      {#if $bootState.phase === "error"}
+        <div class="boot-actions">
+          <button class="major" on:click={() => void initializeApp()} type="button">再試行</button>
+        </div>
+      {/if}
+    </section>
+  </main>
 {:else}
   <main class="stage">
     <header class="topbar">

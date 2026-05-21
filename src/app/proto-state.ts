@@ -13,6 +13,24 @@ type ProtoState = {
   tasks: Task[];
   events: TaskEvent[];
   weights: ScoreWeights;
+  boot: BootState;
+};
+
+type BootPhase = "idle" | "loading" | "ready" | "error";
+
+type BootLogEntry = {
+  id: string;
+  label: string;
+  detail?: string;
+  at: string;
+};
+
+type BootState = {
+  phase: BootPhase;
+  progress: number;
+  message: string;
+  error: string | null;
+  logs: BootLogEntry[];
 };
 
 const initialState: ProtoState = {
@@ -20,6 +38,13 @@ const initialState: ProtoState = {
   tasks: [],
   events: [],
   weights: defaultScoreWeights,
+  boot: {
+    phase: "idle",
+    progress: 0,
+    message: "起動を待機しています。",
+    error: null,
+    logs: [],
+  },
 };
 
 const state = writable<ProtoState>(initialState);
@@ -27,6 +52,8 @@ const state = writable<ProtoState>(initialState);
 export const appState = {
   subscribe: state.subscribe,
 };
+
+export const bootState = derived(state, ($state) => $state.boot);
 
 export const observeTasks = derived(state, ($state) =>
   $state.tasks.filter((task) => task.status === "observe").reverse(),
@@ -50,14 +77,56 @@ export const recommendation = derived(
 );
 
 export async function initializeApp() {
-  const seedData = await tasksRepository.load();
-  const reconciled = await reconcileExpiredActs(seedData.tasks, seedData.events);
-  state.set({
-    ready: true,
-    tasks: reconciled.tasks,
-    events: reconciled.events,
-    weights: defaultScoreWeights,
-  });
+  commitState((current) => ({
+    ...current,
+    ready: false,
+    boot: {
+      phase: "loading",
+      progress: 10,
+      message: "起動を開始しています。",
+      error: null,
+      logs: [],
+    },
+  }));
+  appendBootLog("startup.begin", runtimeLabel());
+
+  try {
+    markBoot("loading", 25, "保存データを読み込んでいます。");
+    appendBootLog("tasks.load.start");
+    const seedData = await tasksRepository.load();
+    appendBootLog("tasks.load.done", `${seedData.tasks.length} tasks / ${seedData.events.length} events`);
+
+    markBoot("loading", 60, "期限切れタスクを整えています。");
+    appendBootLog("acts.reconcile.start");
+    const reconciled = await reconcileExpiredActs(seedData.tasks, seedData.events);
+    appendBootLog(
+      "acts.reconcile.done",
+      `${reconciled.tasks.filter((task) => task.status === "act").length} active`,
+    );
+
+    markBoot("loading", 85, "画面状態を組み立てています。");
+    appendBootLog("state.commit.start");
+    state.set({
+      ready: true,
+      tasks: reconciled.tasks,
+      events: reconciled.events,
+      weights: defaultScoreWeights,
+      boot: {
+        phase: "ready",
+        progress: 100,
+        message: "起動が完了しました。",
+        error: null,
+        logs: [
+          ...reconciledBootLogs(),
+          createBootLog("startup.ready", `${reconciled.tasks.length} tasks loaded`),
+        ],
+      },
+    });
+  } catch (error) {
+    const message = formatBootError(error);
+    appendBootLog("startup.error", message);
+    markBoot("error", 100, "起動に失敗しました。", message);
+  }
 }
 
 export async function addTask(input: CreateTaskInput) {
@@ -157,6 +226,68 @@ export async function completeTask(taskId: string) {
 
 function commitState(update: (current: ProtoState) => ProtoState) {
   state.update((current) => update(current));
+}
+
+function markBoot(phase: BootPhase, progress: number, message: string, error: string | null = null) {
+  commitState((current) => ({
+    ...current,
+    ready: phase === "ready",
+    boot: {
+      ...current.boot,
+      phase,
+      progress,
+      message,
+      error,
+    },
+  }));
+}
+
+function appendBootLog(label: string, detail?: string) {
+  commitState((current) => ({
+    ...current,
+    boot: {
+      ...current.boot,
+      logs: [...current.boot.logs, createBootLog(label, detail)].slice(-12),
+    },
+  }));
+}
+
+function createBootLog(label: string, detail?: string): BootLogEntry {
+  return {
+    id: crypto.randomUUID(),
+    label,
+    detail,
+    at: new Date().toISOString(),
+  };
+}
+
+function reconciledBootLogs() {
+  return get(state).boot.logs;
+}
+
+function runtimeLabel() {
+  if (typeof window === "undefined") {
+    return "server";
+  }
+
+  const runtime = "__TAURI_INTERNALS__" in window ? "tauri" : "web";
+  return `${runtime} / ${navigator.userAgent}`;
+}
+
+function formatBootError(error: unknown) {
+  if (error instanceof Error) {
+    return error.message;
+  }
+
+  if (typeof error === "string") {
+    return error;
+  }
+
+  try {
+    return JSON.stringify(error, null, 2);
+  } catch {
+    return String(error);
+  }
 }
 
 function createEvent(

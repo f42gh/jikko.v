@@ -49,7 +49,7 @@ Web で起動したときは `localStorage`、Tauri で起動したときは `SQ
 - `roiScore` - 1 から 5
 - `estimatedMinutes` - `10 / 25 / 45 / 90`
 
-詳細な設計意図は [DESIGN.md](/Users/f42/dev/jikko.v/DESIGN.md) と [BRIDGE.md](/Users/f42/dev/jikko.v/BRIDGE.md) を参照してください。
+詳細な設計意図は [DESIGN.md](DESIGN.md) と [BRIDGE.md](BRIDGE.md) を参照してください。
 
 ## 主要ファイル
 
@@ -71,7 +71,7 @@ src-tauri/
   src/main.rs         # デスクトップホスト
 ```
 
-設計と実装の対応づけは [TECH_STACK.md](/Users/f42/dev/jikko.v/TECH_STACK.md) にまとめています。
+設計と実装の対応づけは [TECH_STACK.md](TECH_STACK.md) にまとめています。
 
 ## セットアップ
 
@@ -135,11 +135,19 @@ npx playwright install
 
 ## 参照文書
 
-- [BRIDGE.md](/Users/f42/dev/jikko.v/BRIDGE.md)
-  - agent 向けの判断ガイドと実装マップ
-- [DESIGN.md](/Users/f42/dev/jikko.v/DESIGN.md)
+- [BRIDGE.md](BRIDGE.md)
+  - 判断の憲法。実装判断の最優先ガイド
+- [DESIGN.md](DESIGN.md)
   - プロダクトビジョンと UX 原則
-- [TECH_STACK.md](/Users/f42/dev/jikko.v/TECH_STACK.md)
+- [TECH_STACK.md](TECH_STACK.md)
   - 採用技術、モジュール構成、データモデル
-- [notes/tauri.md](/Users/f42/dev/jikko.v/notes/tauri.md)
+- [notes/tauri.md](notes/tauri.md)
   - Tauri 実装メモ
+
+## ドキュメント
+
+`manuals-by-claude/` に、このコードベースを題材にした学習用マニュアルがあります。
+DDD・クリーンアーキテクチャ・Svelte の仕組み、0 からの再設計ノート、
+アンチパターンカタログなど、設計の意図を解説しています。
+
+→ [manuals-by-claude/README.md](manuals-by-claude/README.md)
